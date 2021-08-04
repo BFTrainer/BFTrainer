@@ -1,5 +1,4 @@
 from itertools import groupby
-from jobInfo import JobInfo
 import socket
 from time import sleep
 from time import time
