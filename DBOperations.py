@@ -1,6 +1,6 @@
 import persistqueue
 
-DATABASE_PATH = "jobdata.db"
+DATABASE_PATH = "~/.BFTrainer/jobdata.db"
 
 def submit_job_2_DBQueue(jobString):
     """submit jobstring to persistqueue DB

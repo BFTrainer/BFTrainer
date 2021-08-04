@@ -8,6 +8,12 @@ import psutil
 import stat
 
 NUM_OF_GPUs_PER_NODE = 4
+WORKING_DIR = "~/.BFTrainer"
+
+def create_working_directory():
+    work_dir = os.path.exists(WORKING_DIR)
+    if not work_dir:
+        os.makedirs(work_dir)
 
 def submit_job(min, max, Ns, Os, res_up, res_dw, path):
 
@@ -53,12 +59,13 @@ def add_job(jobname, nodes, job_info_dict):
 
     print("Add job called")
     # 1. Create discovery and host file
-    discover_file = create_discovery_and_host_file(jobname, nodes)
-    command = generate_command(discover_file, jobname, job_info_dict)
+    discover_file_path = create_discovery_and_host_file(jobname, nodes)
+    command = generate_command(discover_file_path, jobname, job_info_dict)
     
     print("horovod command is: " + command)
 
     # mkl service error
+    # refer this issue https://github.com/pytorch/pytorch/issues/37377
     myenv = os.environ
     myenv["MKL_SERVICE_FORCE_INTEL"] = "1"
 
@@ -83,31 +90,22 @@ def add_job(jobname, nodes, job_info_dict):
         jobItem.pid = hvdpid
 
 def create_discovery_and_host_file(jobname, nodes):
-    '''Create horovod elastic run essential files'''
-    host_file = create_host_file(jobname, nodes)
-    discovery_file = create_discovery_file(jobname, host_file)
-    return discovery_file
+    '''Create horovod elastic essential files'''
+    host_file_path = os.path.join(WORKING_DIR, jobname + "_hostfile")
+    discovery_file_path = os.path.join(WORKING_DIR,"discover_host_" + jobname + ".sh")
+    create_host_file(host_file_path, nodes)
+    create_discovery_file(discovery_file_path, host_file_path)
+    return discovery_file_path
 
-def create_host_file(jobname, nodes):
-    file_name = jobname + "_hostfile"
-    if os.path.exists(file_name):
-        return
-    
-    print("create host files")
-    print(nodes)
-
-    with open(file_name, "w") as w:
+def create_host_file(path, nodes):
+    '''Create host file for horovod elastic'''
+    with open(path, "w") as w:
         for node in nodes:
             w.write(node + ':' + str(NUM_OF_GPUs_PER_NODE) + '\n')
-    return file_name
 
-def create_discovery_file(jobname, hostfile):
-    # Create discovery file
-    file_name = "discover_host_" + jobname + ".sh"
-    if os.path.exists(file_name):
-        return
-    
-    with open(file_name, 'w') as w:
+def create_discovery_file(path, hostfile):
+    '''Create discover file for horovod elastic'''
+    with open(path, 'w') as w:
         w.write("#!/bin/bash\n")
         w.write("\n")
         w.write("while read line\n")
@@ -115,24 +113,21 @@ def create_discovery_file(jobname, hostfile):
         w.write("echo $line\n")
         w.write("done < ./" + hostfile)
     
-    # Give the host file permission
-    st = os.stat(file_name)
-    os.chmod(file_name, st.st_mode | stat.S_IRWXO | stat.S_IRWXG | stat.S_IRWXU)
+    # grant host file executable permission
+    st = os.stat(path)
+    os.chmod(path, st.st_mode | stat.S_IRWXO | stat.S_IRWXG | stat.S_IRWXU)
+    return path
 
-    return file_name
-
-def generate_command(discover_file, jobname, job_info_dict):
+def generate_command(discover_file_path, jobname, job_info_dict):
     scriptPath = job_info_dict[jobname].path
-    tmpPath = "~/ANL/scheduler/"  # TODO：this could be resolved(Probably)
-    command = "horovodrun -np 1 --host-discovery-script " + tmpPath + discover_file + " python " + scriptPath
+    command = "horovodrun -np 1 --host-discovery-script " + discover_file_path + " python " + scriptPath
     return command
 
-# And delete the discovery and host file at the same time
 def del_job(jobname, job_info_dict):
     # 1. check the pid is running
     job_pid = job_info_dict[jobname].pid
     if job_pid == -1:
-        del_host_files(jobname) # just clean the job content
+        del_host_and_discover_files(jobname)
         return
     
     # 2. kill process
@@ -148,38 +143,38 @@ def del_job(jobname, job_info_dict):
         job_info_dict.pop(jobname)
 
     # 3. remove discover and host files
-    del_host_files(jobname)
+    del_host_and_discover_files(jobname)
     print("Job completely deleted")
 
-def del_host_files(jobname):
-    discovery_file = "discover_host_" + jobname + ".sh"
-    host_file = jobname + "_hostfile"
+def del_host_and_discover_files(jobname):
+    discovery_file_path = os.path.join(WORKING_DIR, "discover_host_" + jobname + ".sh")
+    host_file_path = os.path.join(WORKING_DIR, jobname + "_hostfile")
 
-    if os.path.exists(discovery_file):
-        os.remove(discovery_file)
+    if os.path.exists(discovery_file_path):
+        os.remove(discovery_file_path)
 
-    if os.path.exists(host_file):
-        os.remove(host_file)
+    if os.path.exists(host_file_path):
+        os.remove(host_file_path)
 
 # Node changes
 def add_nodes_for_job(jobname, nodes):
     print("Call add nodes for job")
     if len(nodes) == 0:
         return
-    # 1. Add host to corresponding hostfile
-    host_file = jobname + "_hostfile"
-    if os.path.exists(host_file):
-        with open(host_file, 'a') as w:
+
+    host_file_path = os.path.join(WORKING_DIR, jobname + "_hostfile") 
+    if os.path.exists(host_file_path):
+        with open(host_file_path, 'a') as w:
             for node in nodes:
                 w.write(node + ":" + str(NUM_OF_GPUs_PER_NODE)  + "\n")
 
 def del_nodes_for_job(jobname, nodes):
     # del host from corresponding hostfile
     print("Call delete nodes for job")
-    host_file = jobname + "_hostfile"
-    if os.path.exists(host_file):
+    host_file_path = os.path.join(WORKING_DIR, jobname + "_hostfile")
+    if os.path.exists(host_file_path):
         lines = []
-        with open(host_file, 'r') as r:
+        with open(host_file_path, 'r') as r:
             lines = r.readlines()
         
         new_lines = []
@@ -188,7 +183,7 @@ def del_nodes_for_job(jobname, nodes):
                 if node not in line:
                     new_lines.append(line)
 
-        with open(host_file, 'a') as w:
+        with open(host_file_path, 'a') as w:
             for line in new_lines:
                 w.write(line)
 
@@ -205,7 +200,7 @@ def adjust_nodes_by_map(new_map, old_map, job_info_dict):
     print("old_job_nodes_dict: ", old_job_nodes_dict)
     print("new_job_nodes_dict: ", new_job_nodes_dict)
 
-    # jobs
+    # Adjustment on job level
     oldjobs = list(old_job_nodes_dict.keys())
     newjobs = list(new_job_nodes_dict.keys())
 
@@ -221,18 +216,15 @@ def adjust_nodes_by_map(new_map, old_map, job_info_dict):
             if newjob not in oldjobs:
                 add_job(newjob, new_job_nodes_dict[newjob], job_info_dict)
 
-    # adjust the node
+    # Adjustment on node level
     overlappedJobs = utils.get_lists_overlap(newjobs, oldjobs)
 
-    print("check on node level")
     # for each job check node changes
     for job in overlappedJobs:
         old_nodes = old_job_nodes_dict[job]
         new_nodes = new_job_nodes_dict[job]
         # nothing changed skip
-        if set(old_nodes) == set(new_nodes):
-            continue
-        else:
+        if set(old_nodes) != set(new_nodes):
             # pid = -1 means this job never launched before
             # len(old_nodes) == 0 means the no node assigned for this job
             if job_info_dict[job].pid == -1 and len(old_nodes) == 0:

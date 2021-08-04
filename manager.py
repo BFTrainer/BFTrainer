@@ -44,10 +44,15 @@ class Manager:
     def __init__(self, max_parallel = MAXIMUM_PARALLEL, monitor_gap = MONITOR_GAP):
         self.max_parallel = max_parallel
         self.monitor_gap = monitor_gap
-
+        self.create_working_directory()
+        
     current_map = pd.DataFrame()
     # A dictionary for global job information
     job_info_dict = {}
+
+    # create working directory
+    def create_working_directory(self):
+        managerOperations.create_working_directory()
 
     # DBOperatioin
     def submit_job(self, min, max, Ns, Os, res_up, res_dw, path):
