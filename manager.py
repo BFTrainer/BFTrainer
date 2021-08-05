@@ -45,7 +45,7 @@ class Manager:
         self.max_parallel = max_parallel
         self.monitor_gap = monitor_gap
         self.create_working_directory()
-        
+
     current_map = pd.DataFrame()
     # A dictionary for global job information
     job_info_dict = {}
@@ -77,7 +77,7 @@ class Manager:
         Args:
             func (func pointer): Client need to offer a function to get the real time training speed
         """
-        return MSGOperations().create_msg_client(address, port)
+        return MSGOperations().create_udp_client(address, port)
 
     def create_msg_server(self): # pass dynamic update data function into 
         """Create a message server for receive throughput report by client
@@ -106,7 +106,6 @@ class Manager:
             jobdetail = utils.parser_job_string_2_job_item(job_string)
             self.job_info_dict[jobdetail.GUID] = jobdetail
 
-        print("DEBUG: ManagerStart: self.job_info_dict print")
         print(self.job_info_dict)
 
         # build inital map

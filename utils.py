@@ -1,4 +1,5 @@
 from jobInfo import JobInfo
+import os
 
 class UDP_Msg:
     def __init__(self, address, id, time, rank_size, credit):
@@ -112,3 +113,7 @@ def parser_udp_message(msg):
     credit = items[4].split(":")
 
     return UDP_Msg(address, id, time, rank_size, credit)
+
+def working_dir():
+    home = os.path.expanduser("~")
+    return os.path.join(home, ".BFTrainer")

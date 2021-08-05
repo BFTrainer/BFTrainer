@@ -1,4 +1,3 @@
-from jobInfo import JobInfo
 import os
 import DBOperations
 from msgOperations import MSGOperations
@@ -8,12 +7,12 @@ import psutil
 import stat
 
 NUM_OF_GPUs_PER_NODE = 4
-WORKING_DIR = "~/.BFTrainer"
+WORKING_DIR = utils.working_dir()
 
 def create_working_directory():
     work_dir = os.path.exists(WORKING_DIR)
     if not work_dir:
-        os.makedirs(work_dir)
+        os.mkdir(WORKING_DIR)
 
 def submit_job(min, max, Ns, Os, res_up, res_dw, path):
 
@@ -26,11 +25,11 @@ def submit_job(min, max, Ns, Os, res_up, res_dw, path):
     
     # res string
     resup_str = "res_up:" + str(res_up)
-    resdown_Str = "res_dw:" + str(res_dw)
+    resdown_str = "res_dw:" + str(res_dw)
 
     # horovod command string
     path_str = "path:" + path
-    jobString = " ".join([node_range_str, ns_str, os_str, resup_str, resdown_Str, path_str])
+    jobString = " ".join([node_range_str, ns_str, os_str, resup_str, resdown_str, path_str])
 
     return DBOperations.submit_job_2_DBQueue(jobString)
 
@@ -70,7 +69,6 @@ def add_job(jobname, nodes, job_info_dict):
     myenv["MKL_SERVICE_FORCE_INTEL"] = "1"
 
     # 2. Launch new job and get process id
-
     with open("stdout.txt","w") as out, open("stderr.txt","w") as err:
         p = Popen(command, shell=True, env=myenv, stdout=out, stderr=err)
 
@@ -111,7 +109,7 @@ def create_discovery_file(path, hostfile):
         w.write("while read line\n")
         w.write("do\n")
         w.write("echo $line\n")
-        w.write("done < ./" + hostfile)
+        w.write("done < " + hostfile)
     
     # grant host file executable permission
     st = os.stat(path)
