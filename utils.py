@@ -94,23 +94,23 @@ def get_job_nodes_mapping_from(cmap):
 
 def get_jobname_by_hostname(hostname, cmap):
     jobnodesdict = get_job_nodes_mapping_from(cmap)
-
     for jn in jobnodesdict:
-        nodes = jobnodesdict[jobname]
+        nodes = jobnodesdict[jn]
         if hostname in nodes:
             jobname = jn
-    
+            break
     return jobname
 
 def parser_udp_message(msg):
     if msg == None or len(msg) == 0:
         return
+    print(msg)
     items = msg.split(" ")
     address = items[0].split(":")[-1]
     id = items[1].split(":")[-1]
     time = items[2].split(":")[-1]
     rank_size = items[3].split(":")[-1]
-    credit = items[4].split(":")
+    credit = items[4].split(":")[-1]
 
     return UDP_Msg(address, id, time, rank_size, credit)
 

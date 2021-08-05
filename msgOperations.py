@@ -17,7 +17,9 @@ class MSGOperations:
             while True:
                 data, addr = s.recvfrom(1024)
                 address_id = 'Address:%s ' % addr[0]
-                self.buffer.append(address_id + str(data, encoding = "utf-8"))
+                msg = address_id + str(data, encoding = "utf-8")
+                self.buffer.append(msg)
+                print(msg)
         except Exception as ex:
             print("udp server creation error message: %s" % ex)
             s.close()
@@ -35,7 +37,6 @@ class MSGOperations:
         """
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.sendto(b'Client Successfully Created', (address, port))
             return s
         except Exception as ex:
             print("udp client creation error message: %s" % ex)

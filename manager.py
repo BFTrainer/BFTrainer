@@ -249,36 +249,55 @@ class Manager:
         if res_down != None:
             job_item.res_down = res_down
 
-    def update_job_data(self, msg_list):
+    def update_job_data(self, mserver):
+        print("update job data")
         while True:
             sleep(10) # pin gap
             msg_items = []
+            print("print every 10 seconds")
+            msg_list = mserver.buffer
+            print(msg_list)
+            print("len of msg_list", str(len(msg_list)))
+
+            if len(msg_list) == 0:
+                continue
+
             for msg in msg_list:
                 msg_item = utils.parser_udp_message(msg)
                 msg_items.append(msg_item)
+                print("+++++====", msg)
             
             # sort and then group
             msg_items.sort(key=lambda x: x.address)
             group_items = groupby(msg_items, lambda x: x.address)
             group_dict = {}
             for key, group in group_items:
-                hostname = socket.gethostbyname(key) # reslove the host name
+                hostname = socket.gethostbyaddr(key)[1][0] # reslove the host name
                 jobname = utils.get_jobname_by_hostname(hostname, self.current_map)
+                print("jobname:", jobname)
                 group_dict[jobname] = list(group)
             
+            print("mark 2")
             # get Ns and Os
             for jobname in group_dict:
                 job_items = group_dict[jobname]
+                print("jobitems")
+                print(job_items)
                 job_items.sort(key=lambda x: x.rank_size)
                 group_job_items = groupby(job_items, lambda x: x.rank_size)
                 Ns = []
                 Os = []
                 for key, group in group_job_items:
-                    node_num = key/NUM_OF_GPUs_PER_NODE
-                    Ns.append(node_num)
+                    print("key", key)
+                    print("group", list(group))
 
-                    avg = sum([x.credit for x in group])/len(group)
+                    node_num = int(key)/NUM_OF_GPUs_PER_NODE
+                    Ns.append(int(node_num))
+                    print("Ns", Ns)
+
+                    avg = sum([float(x.credit) for x in group])/len(list(group))
                     Os.append(avg)
+                    print("Os", Os)
 
                 # get res_up and res_down
                 job_items.sort(key=lambda x: x.id)
@@ -292,19 +311,21 @@ class Manager:
             self.dynamic_update_job_data(jobname=jobname, Ns=Ns, Os=Os, res_up=res_up, res_dw=res_dw)
 
     def run_server(self):
-        mserver=MSGOperations()
-        mserver.create_udp_server()
+        print("Run server")
 
-        p = Thread(target=self.update_job_data, args=(mserver,))
-        p.start()
+        mserver=MSGOperations()
+        p_server = Thread(target=mserver.create_udp_server)
+        p_server.start()
+
+        p_updater = Thread(target=self.update_job_data, args=(mserver,))
+        p_updater.start()
 
 def main():
     # create manager
     m = Manager(max_parallel=MAXIMUM_PARALLEL, monitor_gap= 10)
 
     # run udp server
-    p = Thread(target=m.run_server, name= "udp_server_thead")
-    p.start()
+    m.run_server()
 
     # start jobs
     print("manager start")
