@@ -254,10 +254,7 @@ class Manager:
         while True:
             sleep(10) # pin gap
             msg_items = []
-            print("print every 10 seconds")
             msg_list = mserver.buffer
-            print(msg_list)
-            print("len of msg_list", str(len(msg_list)))
 
             if len(msg_list) == 0:
                 continue
@@ -265,42 +262,36 @@ class Manager:
             for msg in msg_list:
                 msg_item = utils.parser_udp_message(msg)
                 msg_items.append(msg_item)
-                print("+++++====", msg)
-            
             # sort and then group
             msg_items.sort(key=lambda x: x.address)
             group_items = groupby(msg_items, lambda x: x.address)
+            
             group_dict = {}
             for key, group in group_items:
                 hostname = socket.gethostbyaddr(key)[1][0] # reslove the host name
                 jobname = utils.get_jobname_by_hostname(hostname, self.current_map)
-                print("jobname:", jobname)
                 group_dict[jobname] = list(group)
             
-            print("mark 2")
             # get Ns and Os
             for jobname in group_dict:
                 job_items = group_dict[jobname]
-                print("jobitems")
-                print(job_items)
                 job_items.sort(key=lambda x: x.rank_size)
                 group_job_items = groupby(job_items, lambda x: x.rank_size)
+                
                 Ns = []
                 Os = []
                 for key, group in group_job_items:
-                    print("key", key)
-                    print("group", list(group))
-
                     node_num = int(key)/NUM_OF_GPUs_PER_NODE
                     Ns.append(int(node_num))
-                    print("Ns", Ns)
-
-                    avg = sum([float(x.credit) for x in group])/len(list(group))
+                    group_list = list(group)
+                    avg = sum([float(x.credit) for x in group_list])/len(group_list)
                     Os.append(avg)
-                    print("Os", Os)
 
                 # get res_up and res_down
                 job_items.sort(key=lambda x: x.id)
+                print(job_items)
+                res_up = None
+                res_dw = None
                 if len(job_items) > 2:
                     for i in range(len(job_items)-1,-1,-1): # reverse order find rank difference
                         if job_items[i].rank_size > job_items[i-1].rank_size and job_items[i-1].rank_size == job_items[i-2].rank_size:
@@ -308,11 +299,9 @@ class Manager:
                         elif job_items[i].rank_size < job_items[i-1].rank_size:
                             res_dw = (job_items[i].time - job_items[i-1].time) - (job_items[i-1].time - job_items[i-2].time)
 
-            self.dynamic_update_job_data(jobname=jobname, Ns=Ns, Os=Os, res_up=res_up, res_dw=res_dw)
+            self.dynamic_update_job_data(jobname=jobname, Ns=Ns, Os=Os, res_up=res_up, res_down=res_dw)
 
     def run_server(self):
-        print("Run server")
-
         mserver=MSGOperations()
         p_server = Thread(target=mserver.create_udp_server)
         p_server.start()
