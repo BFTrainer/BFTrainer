@@ -267,6 +267,7 @@ class Manager:
                 res_up = None
                 res_dw = None
                 if len(job_items) > 2:
+                    print("update resup and down information")
                     for i in range(len(job_items)-1,-1,-1): # reverse order find rank difference
                         if job_items[i].rank_size > job_items[i-1].rank_size and job_items[i-1].rank_size == job_items[i-2].rank_size:
                             res_up = (job_items[i].time - job_items[i-1].time) - (job_items[i-1].time - job_items[i-2].time)
@@ -275,11 +276,13 @@ class Manager:
 
             self.dynamic_update_job_data(jobname=jobname, Ns=Ns, Os=Os, res_up=res_up, res_down=res_dw)
 
-    def run_server(self):
+    def run_server_and_update_data(self):
+        # run server daemon
         mserver=MSGOperations()
         p_server = Thread(target=mserver.create_udp_server)
         p_server.start()
 
+        # run update daemon
         p_updater = Thread(target=self.update_job_data, args=(mserver,))
         p_updater.start()
 
@@ -287,8 +290,8 @@ def main():
     # create manager
     m = Manager(max_parallel=MAXIMUM_PARALLEL, monitor_gap= 10)
 
-    # run udp server
-    m.run_server()
+    # run udp server and update job data
+    m.run_server_and_update_data()
 
     # start jobs
     print("manager start")
