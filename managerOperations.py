@@ -1,4 +1,6 @@
 import os
+
+from numpy.lib.function_base import _parse_input_dimensions
 import DBOperations
 from msgOperations import MSGOperations
 from subprocess import Popen
@@ -49,7 +51,7 @@ def create_msg_server(): # pass dynamic update data function into
     MSGOperations().create_udp_server()
 
 def add_job(jobname, nodes, job_info_dict):
-    
+    print("Add job was called")
     # if the job not being assigned node
     # just skip the process
     if nodes == None or len(nodes) == 0:
@@ -66,7 +68,10 @@ def add_job(jobname, nodes, job_info_dict):
 
     # 2. Launch new job and get process id
     with open("stdout.txt","w") as out, open("stderr.txt","w") as err:
+        print("before start new job")
+        print("command", command)
         p = Popen(command, shell=True, env=myenv, stdout=out, stderr=err)
+        print("after start new job")
 
         hvdrunParentPid = p.pid
         fp = psutil.Process(hvdrunParentPid)
@@ -178,7 +183,10 @@ def adjust_nodes_by_map(new_map, old_map, job_info_dict):
     # map to dict
     old_job_nodes_dict = utils.get_job_nodes_mapping_from(old_map)
     new_job_nodes_dict = utils.get_job_nodes_mapping_from(new_map)
-
+    
+    print("old dict",old_job_nodes_dict)
+    print("new dict",new_job_nodes_dict)
+    
     # Adjustment on job level
     oldjobs = list(old_job_nodes_dict.keys())
     newjobs = list(new_job_nodes_dict.keys())
@@ -193,8 +201,10 @@ def adjust_nodes_by_map(new_map, old_map, job_info_dict):
         
         for newjob in newjobs:
             if newjob not in oldjobs:
+                print("mark 1 add job before")
                 add_job(newjob, new_job_nodes_dict[newjob], job_info_dict)
-
+                print("makr 1 add job after")
+    
     # Adjustment on node level
     overlappedJobs = utils.get_lists_overlap(newjobs, oldjobs)
 

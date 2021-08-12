@@ -90,7 +90,7 @@ class Manager:
     # life cycle functions
     def _managerStart(self):
         sys_nodes=sys_admin.get_avaliable_nodes_from_system()
-        
+        print("mark1")
         if len(sys_nodes) == 0 or (sys_nodes is None):
             print("No nodes avaliable")
             return
@@ -99,6 +99,7 @@ class Manager:
             print("No valid jobs")
             return
         
+        print("mark2")
         # fetch job from DB
         starting_jobs_num = min(MAXIMUM_PARALLEL, self.get_job_queue_len())
         for i in range(starting_jobs_num):
@@ -106,22 +107,28 @@ class Manager:
             jobdetail = utils.parser_job_string_2_job_item(job_string)
             self.job_info_dict[jobdetail.GUID] = jobdetail
 
+        print("mark3")
         # build inital map
         jobnames = self.job_info_dict.keys()
         data = np.zeros((len(jobnames), len(sys_nodes)), dtype=int) # initial fake data
         initialMap = pd.DataFrame(data=data, index=jobnames, columns=sys_nodes)
         
+        print("mark4")
+
         # Feed the optimizer and get the optimized newmap
         mins, maxs, Ns, Os, res_ups, res_dws = utils.get_optimizer_parameters_by_job_dict(self.job_info_dict)
 
+        print("mark5")
         tmpGRB, new_data, tmpRate, tmpCost = re_allocate(cmap=initialMap.values, jmin=mins, jmax=maxs,
                                                             Ns=Ns,Os=Os, Tfwd=10, res_up=res_ups, res_dw = res_dws, 
                                                             time_limit=10)
+        print(new_data)
 
         new_map = pd.DataFrame(data=new_data, index=jobnames, columns=sys_nodes)
 
+        print("mark6")
         managerOperations.adjust_nodes_by_map(new_map=new_map, old_map=initialMap, job_info_dict = self.job_info_dict)
-
+        print("mark7")
         self.current_map = new_map
 
     def scheduler_job_change(self, GUIDs):
@@ -226,8 +233,10 @@ class Manager:
             job_item.res_down = res_down
 
     def update_job_data(self, mserver):
+        print("start update data")
         while True:
             sleep(10) # pin gap
+            print("update data every 10 seconds")
             msg_items = []
             msg_list = mserver.buffer
 
@@ -267,21 +276,25 @@ class Manager:
                 res_up = None
                 res_dw = None
                 if len(job_items) > 2:
-                    print("update resup and down information")
+                    print("update resup and down")
                     for i in range(len(job_items)-1,-1,-1): # reverse order find rank difference
                         if job_items[i].rank_size > job_items[i-1].rank_size and job_items[i-1].rank_size == job_items[i-2].rank_size:
                             res_up = (job_items[i].time - job_items[i-1].time) - (job_items[i-1].time - job_items[i-2].time)
                         elif job_items[i].rank_size < job_items[i-1].rank_size:
                             res_dw = (job_items[i].time - job_items[i-1].time) - (job_items[i-1].time - job_items[i-2].time)
+                print("res_up",res_up)
+                print("res_dw",res_dw)
 
             self.dynamic_update_job_data(jobname=jobname, Ns=Ns, Os=Os, res_up=res_up, res_down=res_dw)
 
     def run_server_and_update_data(self):
         # run server daemon
+        print("run server and update data")
         mserver=MSGOperations()
         p_server = Thread(target=mserver.create_udp_server)
         p_server.start()
 
+        print("start run update job data")
         # run update daemon
         p_updater = Thread(target=self.update_job_data, args=(mserver,))
         p_updater.start()
@@ -291,13 +304,12 @@ def main():
     m = Manager(max_parallel=MAXIMUM_PARALLEL, monitor_gap= 10)
 
     # run udp server and update job data
-    m.run_server_and_update_data()
+    # m.run_server_and_update_data()
 
     # start jobs
-    print("manager start")
+    print("before manager start")
     m._managerStart()
     print("after manager start")
-
     # node leave
     # m.scheduler_nodes_change(JobNodeStatus.NODEOUT, ["node10"])
     
