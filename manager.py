@@ -16,7 +16,7 @@ from threading import Thread
 
 MAXIMUM_PARALLEL = 2
 MONITOR_GAP = 5
-NUM_OF_GPUs_PER_NODE = 4
+NUM_OF_GPUs_PER_NODE = 1
 
 class JobNodeStatus(Enum):
     JOBFAILED=0

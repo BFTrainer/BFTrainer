@@ -6,7 +6,7 @@ def get_avaliable_nodes_from_system():
     Returns:
         list: a list of avaliable nodes
     """
-    nodelist = ["thetagpu14","thetagpu15","thetagpu16","thetagpu20"]
+    nodelist = ["thetagpu04","thetagpu06","thetagpu14","thetagpu18"]
     nodelist.sort()
     return nodelist
 
