@@ -1,6 +1,4 @@
 import os
-
-from numpy.lib.function_base import _parse_input_dimensions
 import DBOperations
 from msgOperations import MSGOperations
 from subprocess import Popen
@@ -58,7 +56,7 @@ def add_job(jobname, nodes, job_info_dict):
         return
 
     # 1. Create discovery and host file
-    discover_file_path = create_discovery_and_host_file(jobname, nodes)
+    discover_file_path = create_discovery_file(jobname, nodes)
     command = generate_command(discover_file_path, jobname, job_info_dict)
     
     # mkl service error
@@ -82,34 +80,17 @@ def add_job(jobname, nodes, job_info_dict):
         jobItem = job_info_dict[jobname]
         jobItem.pid = hvdpid
 
-def create_discovery_and_host_file(jobname, nodes):
-    '''Create horovod elastic essential files'''
-    host_file_path = os.path.join(WORKING_DIR, jobname + "_hostfile")
-    discovery_file_path = os.path.join(WORKING_DIR,"discover_host_" + jobname + ".sh")
-    create_host_file(host_file_path, nodes)
-    create_discovery_file(discovery_file_path, host_file_path)
-    return discovery_file_path
-
-def create_host_file(path, nodes):
-    '''Create host file for horovod elastic'''
-    with open(path, "w") as w:
-        for node in nodes:
-            w.write(node + ':' + str(NUM_OF_GPUs_PER_NODE) + '\n')
-
-def create_discovery_file(path, hostfile):
-    '''Create discover file for horovod elastic'''
-    with open(path, 'w') as w:
+def create_discovery_file(jobname, nodes):
+    discovery_path = os.path.join(WORKING_DIR,"discover_host_" + jobname + ".sh")
+    with open(discovery_path, 'w') as w:
         w.write("#!/bin/bash\n")
-        w.write("\n")
-        w.write("while read line\n")
-        w.write("do\n")
-        w.write("echo $line\n")
-        w.write("done < " + hostfile)
-    
+        for node in nodes:
+            w.write("echo " + node + ":" + str(NUM_OF_GPUs_PER_NODE) + "\n")
+
     # grant host file executable permission
-    st = os.stat(path)
-    os.chmod(path, st.st_mode | stat.S_IRWXO | stat.S_IRWXG | stat.S_IRWXU)
-    return path
+    st = os.stat(discovery_path)
+    os.chmod(discovery_path, st.st_mode | stat.S_IRWXO | stat.S_IRWXG | stat.S_IRWXU)
+    return discovery_path
 
 def generate_command(discover_file_path, jobname, job_info_dict):
     scriptPath = job_info_dict[jobname].path
