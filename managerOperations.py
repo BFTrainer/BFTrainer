@@ -8,7 +8,7 @@ import utils
 import psutil
 import stat
 
-NUM_OF_GPUs_PER_NODE = 4
+NUM_OF_GPUs_PER_NODE = 1
 WORKING_DIR = utils.working_dir()
 
 def create_working_directory():
@@ -77,7 +77,7 @@ def add_job(jobname, nodes, job_info_dict):
         fp = psutil.Process(hvdrunParentPid)
 
         hvdpid = fp.children()[0].pid
-
+        print("hvdpid is:", hvdpid)
         # 3. update process id to `jobInfoDict`
         jobItem = job_info_dict[jobname]
         jobItem.pid = hvdpid
@@ -113,7 +113,7 @@ def create_discovery_file(path, hostfile):
 
 def generate_command(discover_file_path, jobname, job_info_dict):
     scriptPath = job_info_dict[jobname].path
-    command = "horovodrun -np 1 --host-discovery-script " + discover_file_path + " python " + scriptPath
+    command = "/lus/theta-fs0/software/thetagpu/conda/2021-06-26/mconda3/bin/horovodrun -np 1 --host-discovery-script " + discover_file_path + " python " + scriptPath
     return command
 
 def del_job(jobname, job_info_dict):
