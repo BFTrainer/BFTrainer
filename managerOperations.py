@@ -102,7 +102,7 @@ def del_job(jobname, job_info_dict):
     # 1. check the pid is running
     job_pid = job_info_dict[jobname].pid
     if job_pid == -1:
-        del_host_and_discover_files(jobname)
+        del_discover_files(jobname)
         return
     
     # 2. kill process
@@ -115,17 +115,13 @@ def del_job(jobname, job_info_dict):
         job_info_dict.pop(jobname)
 
     # 3. remove discover and host files
-    del_host_and_discover_files(jobname)
+    del_discover_files(jobname)
 
-def del_host_and_discover_files(jobname):
+def del_discover_files(jobname):
     discovery_file_path = os.path.join(WORKING_DIR, "discover_host_" + jobname + ".sh")
-    host_file_path = os.path.join(WORKING_DIR, jobname + "_hostfile")
 
     if os.path.exists(discovery_file_path):
         os.remove(discovery_file_path)
-
-    if os.path.exists(host_file_path):
-        os.remove(host_file_path)
 
 # Node changes
 def add_nodes_for_job(jobname, nodes):
