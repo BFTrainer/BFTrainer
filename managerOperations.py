@@ -49,14 +49,14 @@ def create_msg_server(): # pass dynamic update data function into
     MSGOperations().create_udp_server()
 
 def add_job(jobname, nodes, job_info_dict):
-    
+    print("Add job was called")
     # if the job not being assigned node
     # just skip the process
     if nodes == None or len(nodes) == 0:
         return
 
     # 1. Create discovery and host file
-    discover_file_path = create_discovery_and_host_file(jobname, nodes)
+    discover_file_path = create_discovery_file(jobname, nodes)
     command = generate_command(discover_file_path, jobname, job_info_dict)
     
     # mkl service error
@@ -66,49 +66,36 @@ def add_job(jobname, nodes, job_info_dict):
 
     # 2. Launch new job and get process id
     with open("stdout.txt","w") as out, open("stderr.txt","w") as err:
+        print("before start new job")
+        print("command", command)
         p = Popen(command, shell=True, env=myenv, stdout=out, stderr=err)
+        print("after start new job")
 
         hvdrunParentPid = p.pid
         fp = psutil.Process(hvdrunParentPid)
 
         hvdpid = fp.children()[0].pid
-
+        print("hvdpid is:", hvdpid)
         # 3. update process id to `jobInfoDict`
         jobItem = job_info_dict[jobname]
         jobItem.pid = hvdpid
 
-def create_discovery_and_host_file(jobname, nodes):
-    '''Create horovod elastic essential files'''
-    host_file_path = os.path.join(WORKING_DIR, jobname + "_hostfile")
-    discovery_file_path = os.path.join(WORKING_DIR,"discover_host_" + jobname + ".sh")
-    create_host_file(host_file_path, nodes)
-    create_discovery_file(discovery_file_path, host_file_path)
-    return discovery_file_path
-
-def create_host_file(path, nodes):
-    '''Create host file for horovod elastic'''
-    with open(path, "w") as w:
-        for node in nodes:
-            w.write(node + ':' + str(NUM_OF_GPUs_PER_NODE) + '\n')
-
-def create_discovery_file(path, hostfile):
-    '''Create discover file for horovod elastic'''
-    with open(path, 'w') as w:
+def create_discovery_file(jobname, nodes):
+    discovery_path = os.path.join(WORKING_DIR,"discover_host_" + jobname + ".sh")
+    with open(discovery_path, 'w') as w:
         w.write("#!/bin/bash\n")
-        w.write("\n")
-        w.write("while read line\n")
-        w.write("do\n")
-        w.write("echo $line\n")
-        w.write("done < " + hostfile)
-    
+        for node in nodes:
+            w.write("echo " + node + ":" + str(NUM_OF_GPUs_PER_NODE) + "\n")
+
     # grant host file executable permission
-    st = os.stat(path)
-    os.chmod(path, st.st_mode | stat.S_IRWXO | stat.S_IRWXG | stat.S_IRWXU)
-    return path
+    st = os.stat(discovery_path)
+    os.chmod(discovery_path, st.st_mode | stat.S_IRWXO | stat.S_IRWXG | stat.S_IRWXU)
+    return discovery_path
 
 def generate_command(discover_file_path, jobname, job_info_dict):
     scriptPath = job_info_dict[jobname].path
-    command = "horovodrun -np 1 --host-discovery-script " + discover_file_path + " python " + scriptPath
+    #command = "/lus/theta-fs0/software/thetagpu/conda/2021-06-26/mconda3/bin/horovodrun -np 1 --host-discovery-script " + discover_file_path + " python " + scriptPath # 有一个配置文件 
+    command = "horovodrun -np 1 --host-discovery-script " + discover_file_path + " python " + scriptPath # 有一个配置文件 
     return command
 
 def del_job(jobname, job_info_dict):
@@ -178,7 +165,10 @@ def adjust_nodes_by_map(new_map, old_map, job_info_dict):
     # map to dict
     old_job_nodes_dict = utils.get_job_nodes_mapping_from(old_map)
     new_job_nodes_dict = utils.get_job_nodes_mapping_from(new_map)
-
+    
+    print("old dict",old_job_nodes_dict)
+    print("new dict",new_job_nodes_dict)
+    
     # Adjustment on job level
     oldjobs = list(old_job_nodes_dict.keys())
     newjobs = list(new_job_nodes_dict.keys())
@@ -193,8 +183,10 @@ def adjust_nodes_by_map(new_map, old_map, job_info_dict):
         
         for newjob in newjobs:
             if newjob not in oldjobs:
+                print("mark 1 add job before")
                 add_job(newjob, new_job_nodes_dict[newjob], job_info_dict)
-
+                print("makr 1 add job after")
+    
     # Adjustment on node level
     overlappedJobs = utils.get_lists_overlap(newjobs, oldjobs)
 
