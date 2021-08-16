@@ -1,5 +1,6 @@
 from jobInfo import JobInfo
 import os
+import socket
 
 class UDP_Msg:
     def __init__(self, address, id, time, rank_size, credit):
@@ -42,7 +43,7 @@ def parser_job_string_2_job_item(jobString):
         val = item.split(":")[1]
         jobDict[key] = val
 
-    jobdetail = JobInfo(GUID=jobDict["GUID"], 
+    jobdetail = JobInfo(GUID=jobDict["GUID"],
                         pid=-1,                 # default set pid -1
                         max=jobDict["max"], 
                         min=jobDict["min"], 
@@ -117,3 +118,8 @@ def parser_udp_message(msg):
 def working_dir():
     home = os.path.expanduser("~")
     return os.path.join(home, ".BFTrainer")
+
+def is_theta_cluster():
+    if socket.gethostname().startswith("theta"):
+        return True
+    return False

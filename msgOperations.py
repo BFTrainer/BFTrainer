@@ -1,7 +1,13 @@
 import socket
+import utils
+
 # This address is for 
 # ADDRESS = '172.23.2.202' # thetagpu14
+
 ADDRESS = '10.3.0.108'
+if utils.is_theta_cluster():
+    ADDRESS = '172.23.2.202' # thetagpu14
+
 PORT = 9999
 class MSGOperations:
     def __init__(self) -> None:
