@@ -84,7 +84,7 @@ def create_discovery_file(jobname, nodes):
     discovery_path = os.path.join(WORKING_DIR,"discover_host_" + jobname + ".sh")
     with open(discovery_path, 'w') as w:
         w.write("#!/bin/bash\n")
-        w.write("echo node06:0\n")
+        #w.write("echo node06:0\n")
         for node in nodes:
             w.write("echo " + node + ":" + str(NUM_OF_GPUs_PER_NODE) + "\n")
 

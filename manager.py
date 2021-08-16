@@ -304,7 +304,7 @@ def main():
     m = Manager(max_parallel=MAXIMUM_PARALLEL, monitor_gap= 10)
 
     # run udp server and update job data
-    # m.run_server_and_update_data()
+    m.run_server_and_update_data()
 
     # start jobs
     print("before manager start")
