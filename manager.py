@@ -252,23 +252,35 @@ class Manager:
             
             group_dict = {}
             for key, group in group_items:
-                hostname = socket.gethostbyaddr(key)[1][0] # reslove the host name
+                host_tuple = socket.gethostbyaddr(key) 
+                hostname = host_tuple[0].split(".")[0] # this resolve is specific for thetagpu cluster
+                print("====hostname====:", hostname)
                 jobname = utils.get_jobname_by_hostname(hostname, self.current_map)
+                print("jobname", jobname)
                 group_dict[jobname] = list(group)
-            
+           
+            print("group dict", group_dict)
+
             # get Ns and Os
             for jobname in group_dict:
                 job_items = group_dict[jobname]
                 job_items.sort(key=lambda x: x.rank_size)
                 group_job_items = groupby(job_items, lambda x: x.rank_size)
                 
+                print(group_job_items)
+
+
                 Ns = []
                 Os = []
                 for key, group in group_job_items:
+                    print("cal the node num")
                     node_num = int(key)/NUM_OF_GPUs_PER_NODE
+                    print("node number is:", node_num)
                     Ns.append(int(node_num))
                     group_list = list(group)
+                    print("cal the avg")
                     avg = sum([float(x.credit) for x in group_list])/len(group_list)
+                    print("avg is:", avg)
                     Os.append(avg)
 
                 # get res_up and res_down
@@ -276,7 +288,7 @@ class Manager:
                 res_up = None
                 res_dw = None
                 if len(job_items) > 2:
-                    print("update resup and down")
+                    print("update res up and down")
                     for i in range(len(job_items)-1,-1,-1): # reverse order find rank difference
                         if job_items[i].rank_size > job_items[i-1].rank_size and job_items[i-1].rank_size == job_items[i-2].rank_size:
                             res_up = (job_items[i].time - job_items[i-1].time) - (job_items[i-1].time - job_items[i-2].time)
