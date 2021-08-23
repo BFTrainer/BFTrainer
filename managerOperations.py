@@ -14,14 +14,14 @@ def create_working_directory():
     if not work_dir:
         os.mkdir(WORKING_DIR)
 
-def submit_job(min, max, Ns, Os, res_up, res_dw, path):
+def submit_job(min, max, N, O, res_up, res_dw, path):
 
     # node string
     node_range_str = "min:%d max:%d" % (min, max)
 
     # Ns and Os string
-    ns_str = "Ns:" + ",".join([str(_) for _ in Ns])
-    os_str = "Os:" + ",".join([str(_) for _ in Os])
+    ns_str = "Ns:" + ",".join([str(_) for _ in N])
+    os_str = "Os:" + ",".join([str(_) for _ in O])
     
     # res string
     resup_str = "res_up:" + str(res_up)

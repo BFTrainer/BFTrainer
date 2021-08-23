@@ -55,11 +55,11 @@ class Manager:
         managerOperations.create_working_directory()
 
     # DBOperatioin
-    def submit_job(self, min, max, Ns, Os, res_up, res_dw, path):
+    def submit_job(self, min, max, N, O, res_up, res_dw, path):
         """
         Function for user to submit jobs
         """
-        return managerOperations.submit_job(min, max, Ns, Os, res_up, res_dw, path)
+        return managerOperations.submit_job(min, max, N, O, res_up, res_dw, path)
 
     def get_job_queue_len(self):
         """
@@ -106,6 +106,8 @@ class Manager:
             job_string = self._get_a_job_from_DB()
             jobdetail = utils.parser_job_string_2_job_item(job_string)
             self.job_info_dict[jobdetail.GUID] = jobdetail
+        
+        print(self.job_info_dict)
 
         print("mark3")
         # build inital map
@@ -322,8 +324,13 @@ def main():
     print("before manager start")
     m._managerStart()
     print("after manager start")
+
+
     # node leave
-    # m.scheduler_nodes_change(JobNodeStatus.NODEOUT, ["node10"])
+    
+    #sleep(30)
+    #print("node leave")
+    #m.scheduler_nodes_change(JobNodeStatus.NODEOUT, ["thetagpu22"])
     
     # node in
     # m.scheduler_nodes_change(JobNodeStatus.NODEIN, ["node10"])
