@@ -213,7 +213,11 @@ class Manager:
                     self.scheduler_job_change(GUIDs=jobname)
             print("============= monitor report ===============")
     
-    def dynamic_update_job_data(self, jobname, Ns=None, Os=None, res_up = None, res_down = None):
+    def dynamic_update_job_data(self, jobname, N=None, O=None, res_up = None, res_down = None):
+        print("========Dynamic update job data called==========")
+        print("N is: ", N)
+        print("O is: ", O)
+
         if self.job_info_dict == None or len(self.job_info_dict) == 0:
             return
 
@@ -222,11 +226,11 @@ class Manager:
 
         job_item = self.job_info_dict[jobname]
 
-        if Ns != None:
-            job_item.Ns = Ns
+        if N != None:
+            job_item.N = N
         
-        if Os != None:
-            job_item.Os = Os
+        if O != None:
+            job_item.O = O
 
         if res_up != None:
             job_item.res_up = res_up
@@ -271,19 +275,18 @@ class Manager:
                 
                 print(group_job_items)
 
-
-                Ns = []
-                Os = []
+                N = []
+                O = []
                 for key, group in group_job_items:
                     print("cal the node num")
                     node_num = int(key)/NUM_OF_GPUs_PER_NODE
                     print("node number is:", node_num)
-                    Ns.append(int(node_num))
+                    N.append(int(node_num))
                     group_list = list(group)
                     print("cal the avg")
                     avg = sum([float(x.credit) for x in group_list])/len(group_list)
                     print("avg is:", avg)
-                    Os.append(avg)
+                    O.append(avg)
 
                 # get res_up and res_down
                 job_items.sort(key=lambda x: x.id)
@@ -299,7 +302,7 @@ class Manager:
                 print("res_up",res_up)
                 print("res_dw",res_dw)
 
-            self.dynamic_update_job_data(jobname=jobname, Ns=Ns, Os=Os, res_up=res_up, res_down=res_dw)
+            self.dynamic_update_job_data(jobname=jobname, N=N, O=O, res_up=res_up, res_down=res_dw)
 
     def run_server_and_update_data(self):
         # run server daemon
@@ -328,9 +331,9 @@ def main():
 
     # node leave
     
-    #sleep(30)
-    #print("node leave")
-    #m.scheduler_nodes_change(JobNodeStatus.NODEOUT, ["thetagpu22"])
+    sleep(30)
+    print("node leave")
+    m.scheduler_nodes_change(JobNodeStatus.NODEOUT, ["thetagpu21"])
     
     # node in
     # m.scheduler_nodes_change(JobNodeStatus.NODEIN, ["node10"])
