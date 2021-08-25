@@ -19,9 +19,9 @@ def submit_job(min, max, N, O, res_up, res_dw, path):
     # node string
     node_range_str = "min:%d max:%d" % (min, max)
 
-    # Ns and Os string
-    ns_str = "N:" + ",".join([str(_) for _ in N])
-    os_str = "O:" + ",".join([str(_) for _ in O])
+    # N and O string
+    n_str = "N:" + ",".join([str(_) for _ in N])
+    o_str = "O:" + ",".join([str(_) for _ in O])
     
     # res string
     resup_str = "res_up:" + str(res_up)
@@ -29,7 +29,7 @@ def submit_job(min, max, N, O, res_up, res_dw, path):
 
     # horovod command string
     path_str = "path:" + path
-    jobString = " ".join([node_range_str, ns_str, os_str, resup_str, resdown_str, path_str])
+    jobString = " ".join([node_range_str, n_str, o_str, resup_str, resdown_str, path_str])
 
     return DBOperations.submit_job_2_DBQueue(jobString)
 

@@ -267,7 +267,7 @@ class Manager:
            
             print("group dict", group_dict)
 
-            # get Ns and Os
+            # get N and O
             for jobname in group_dict:
                 job_items = group_dict[jobname]
                 job_items.sort(key=lambda x: x.rank_size)
@@ -331,9 +331,9 @@ def main():
 
     # node leave
     
-    sleep(30)
-    print("node leave")
-    m.scheduler_nodes_change(JobNodeStatus.NODEOUT, ["thetagpu21"])
+    #sleep(30)
+    #print("node leave")
+    #m.scheduler_nodes_change(JobNodeStatus.NODEOUT, ["thetagpu21"])
     
     # node in
     # m.scheduler_nodes_change(JobNodeStatus.NODEIN, ["node10"])
