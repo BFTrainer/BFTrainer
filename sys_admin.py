@@ -8,7 +8,7 @@ def get_avaliable_nodes_from_system():
         list: a list of avaliable nodes
     """
     if utils.is_theta_cluster():
-        nodelist = ["thetagpu11","thetagpu12","thetagpu14","thetagpu16"]
+        nodelist = ["thetagpu12","thetagpu13","thetagpu18","thetagpu19"]
     else:
         nodelist = ["node07", "node08", "node09", "node10"]
     return nodelist

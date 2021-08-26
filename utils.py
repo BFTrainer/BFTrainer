@@ -41,10 +41,12 @@ def parser_job_string_2_job_item(jobString):
     items = jobString.split(" ")
     for item in items:
         key = item.split(":")[0]
-        if key == "N":
-            val = list(int(x) for x in item.split(":")[1].split(",")) 
-        elif key == "O":
-            val = list(float(x) for x in item.split(":")[1].split(",")) 
+        if key == "N": # get Nodes val(ordered)
+            val = list(int(x) for x in item.split(":")[1].split(","))
+            val.sort()
+        elif key == "O": # get Objective val(ordered)
+            val = list(float(x) for x in item.split(":")[1].split(","))
+            val.sort()
         else:
             val = item.split(":")[1]
 
@@ -74,9 +76,6 @@ def get_optimizer_parameters_by_job_dict(jobInfoDict):
         Os.append(jobdetail.O)
         res_ups.append(float(jobdetail.resUp)) # need to profile upon specific job
         res_dws.append(float(jobdetail.resDown)) # need to profile upon specific job
-
-    print("&&&& Ns &&&&&", Ns)
-    print("&&&& Os &&&&&", Os)
 
     return mins, maxs, Ns, Os, res_ups, res_dws
 
@@ -133,3 +132,10 @@ def is_theta_cluster():
     if socket.gethostname().startswith("theta"):
         return True
     return False
+
+def get_host_name_by_address(address):
+    host_tuple = socket.gethostbyaddr(address)
+    # this resolve is specific for thetagpu cluster
+    hostname = host_tuple[0].split(".")[0]
+    return hostname
+
