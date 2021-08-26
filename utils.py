@@ -1,5 +1,6 @@
 from jobInfo import JobInfo
 import os
+import socket
 
 class UDP_Msg:
     def __init__(self, address, id, time, rank_size, credit):
@@ -32,22 +33,31 @@ def get_lists_overlap(nums1, nums2):
 def parser_job_string_2_job_item(jobString):
     """
     jobstring example for reference
-    name:job1 min:1 max:6 Ns:1,2,3 Os:1,1.9,2.8 res_up:3 res_down:1 path:train.py
+    name:job1 min:1 max:6 N:1,2,3 O:1,1.9,2.8 res_up:3 res_down:1 path:train.py
     """
 
+    # Get job dict from string
     jobDict = {}
     items = jobString.split(" ")
     for item in items:
         key = item.split(":")[0]
-        val = item.split(":")[1]
+        if key == "N": # get Nodes val(ordered)
+            val = list(int(x) for x in item.split(":")[1].split(","))
+            val.sort()
+        elif key == "O": # get Objective val(ordered)
+            val = list(float(x) for x in item.split(":")[1].split(","))
+            val.sort()
+        else:
+            val = item.split(":")[1]
+
         jobDict[key] = val
 
-    jobdetail = JobInfo(GUID=jobDict["GUID"], 
+    jobdetail = JobInfo(GUID=jobDict["GUID"],
                         pid=-1,                 # default set pid -1
                         max=jobDict["max"], 
                         min=jobDict["min"], 
-                        Ns=jobDict["Ns"], 
-                        Os=jobDict["Os"], 
+                        N=jobDict["N"], 
+                        O=jobDict["O"], 
                         resUp=jobDict["res_up"],
                         resDown=jobDict["res_dw"],
                         path=jobDict["path"]
@@ -62,8 +72,8 @@ def get_optimizer_parameters_by_job_dict(jobInfoDict):
         jobnames.append(jobdetail.GUID)
         mins.append(int(jobdetail.min))
         maxs.append(int(jobdetail.max))
-        Ns.append(list(int(x) for x in jobdetail.Ns.split(",")))
-        Os.append(list(float(x) for x in jobdetail.Os.split(",")))
+        Ns.append(jobdetail.N)
+        Os.append(jobdetail.O)
         res_ups.append(float(jobdetail.resUp)) # need to profile upon specific job
         res_dws.append(float(jobdetail.resDown)) # need to profile upon specific job
 
@@ -117,3 +127,15 @@ def parser_udp_message(msg):
 def working_dir():
     home = os.path.expanduser("~")
     return os.path.join(home, ".BFTrainer")
+
+def is_theta_cluster():
+    if socket.gethostname().startswith("theta"):
+        return True
+    return False
+
+def get_host_name_by_address(address):
+    host_tuple = socket.gethostbyaddr(address)
+    # this resolve is specific for thetagpu cluster
+    hostname = host_tuple[0].split(".")[0]
+    return hostname
+

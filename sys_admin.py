@@ -1,3 +1,4 @@
+import utils
 
 def get_avaliable_nodes_from_system():
     """The system will offer a api for getting the
@@ -6,8 +7,10 @@ def get_avaliable_nodes_from_system():
     Returns:
         list: a list of avaliable nodes
     """
-    nodelist = ["node07","node08","node09","node10"]
-    nodelist.sort()
+    if utils.is_theta_cluster():
+        nodelist = ["thetagpu12","thetagpu13","thetagpu18","thetagpu19"]
+    else:
+        nodelist = ["node07", "node08", "node09", "node10"]
     return nodelist
 
 def monitor_hvd_processes():
