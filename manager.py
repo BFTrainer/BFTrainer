@@ -167,12 +167,18 @@ class Manager:
         self.current_map = new_map
 
     def scheduler_nodes_change(self, flag, nodes):
+        
+        # validate nodes name before operations 
+        if sys_admin.is_nodes_belong_to_avaliable_nodes(nodes) == False:
+            print("error: nodes out of avaliable nodes range")
+            return
+
         # drop or add columns for nodes in cmap
         old_map = self.current_map
         mins, maxs, Ns, Os, res_ups, res_dws = utils.get_optimizer_parameters_by_job_dict(self.job_info_dict)
 
         if flag == JobNodeStatus.NODEIN:
-            print("Node in")
+            print("node in")
             for node in nodes:
                self.current_map.insert(self.current_map.shape[1], node, 0) # dataframe add one new column
             tmpGRB, new_data, tmpRate, tmpCost = re_allocate(cmap=self.current_map.values, jmin=mins, jmax=maxs,
@@ -206,7 +212,8 @@ class Manager:
             managerOperations.del_host_files(jobname=job)
     
     # TODO: change the way triggering re-allocation
-    def _monitor_hvd_processes(self):
+    def monitor_hvd_processes(self):
+
         while True:
             print("============= monitor report ===============")
             sleep(self.monitor_gap) # check every 15s
@@ -285,10 +292,10 @@ class Manager:
             job_item.res_down = res_down
 
     def update_job_data(self, mserver):
-        print("start update data")
+        print("start dynamic update Ns/Os and resup and down data")
         while True:
             sleep(20) # pin gap
-            print("update data every 10 seconds")
+            print("update data every 20 seconds")
             msg_items = []
             msg_list = mserver.buffer
 
@@ -314,6 +321,7 @@ class Manager:
 
             print("group dict", group_dict)
 
+            print("cmap in update job data:", self.current_map)
             # get N and O
             for jobname in group_dict:
                 job_items = group_dict[jobname]
@@ -342,9 +350,12 @@ class Manager:
                     print("update res up and down")
                     for i in range(len(job_items)-1,-1,-1): # reverse order find rank difference
                         if job_items[i].rank_size > job_items[i-1].rank_size and job_items[i-1].rank_size == job_items[i-2].rank_size:
+                            print("================ get the res_up cost ===================")
                             res_up = (job_items[i].time - job_items[i-1].time) - (job_items[i-1].time - job_items[i-2].time)
                         elif job_items[i].rank_size < job_items[i-1].rank_size:
+                            print("================ get the res_down cost =================")
                             res_dw = (job_items[i].time - job_items[i-1].time) - (job_items[i-1].time - job_items[i-2].time)
+                
                 print("res_up",res_up)
                 print("res_dw",res_dw)
 
@@ -367,20 +378,28 @@ def main():
     m = Manager(max_parallel=MAXIMUM_PARALLEL, monitor_gap= 10)
 
     # run udp server and update job data
-    # m.run_server_and_update_data()
+    m.run_server_and_update_data() # The server report data is used to update jobInfoDict
 
     # start jobs
     print("before manager start")
     m._managerStart()
     print("after manager start")
 
+    print("========================================")
+    
     # node leave
-    sleep(50)
+    sleep(40)
     print("node leave in main")
-    m.scheduler_nodes_change(JobNodeStatus.NODEOUT, ["thetagpu20"])
+    m.scheduler_nodes_change(JobNodeStatus.NODEOUT, ["thetagpu16"])
 
     # node in
-    # m.scheduler_nodes_change(JobNodeStatus.NODEIN, ["node10"])
+    sleep(40)
+    print("node come back in main")
+    m.scheduler_nodes_change(JobNodeStatus.NODEIN, ["thetagpu16"])
+
+    # Process for monitor jobs job pids
+    p_monitor = Thread(target=m.monitor_hvd_processes)
+    p_monitor.start()
 
 if __name__ == "__main__":
     main()

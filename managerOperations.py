@@ -84,7 +84,7 @@ def create_discovery_file(jobname, nodes):
     discovery_path = os.path.join(WORKING_DIR,"discover_host_" + jobname + ".sh")
     with open(discovery_path, 'w') as w:
         w.write("#!/bin/bash\n")
-        #w.write("echo node06:0\n")
+        # w.write("echo thetagpu10:0\n")  # dummy computing node (the purpose for this line is for launch 1 node task at initial)
         for node in nodes:
             w.write("echo " + node + ":" + str(NUM_OF_GPUs_PER_NODE) + "\n")
 
@@ -126,10 +126,8 @@ def del_discover_files(jobname):
 
 # Node changes
 def add_nodes_for_job(jobname, nodes):
-    print("add nodes called")
-    if len(nodes) == 0:
-        return
-    
+    print("add nodes called")    
+
     # discover host file
     discover_file_path = os.path.join(WORKING_DIR, "discover_host_" + jobname + ".sh")
     
@@ -148,8 +146,8 @@ def is_line_contain_delete_nodes(line, nodes):
     return flag
 
 def del_nodes_for_job(jobname, nodes):
-
     print("delete node for job called")
+
     # del host from corresponding hostfile
     discover_file_path = os.path.join(WORKING_DIR, "discover_host_" + jobname + ".sh")
     if os.path.exists(discover_file_path):
@@ -222,7 +220,11 @@ def adjust_nodes_by_map(new_map, old_map, job_info_dict):
             
             # job existed adjust nodes only
             intersectionNodes = utils.get_lists_overlap(old_nodes, new_nodes)
-            addNodes =list(set(new_nodes) - set(intersectionNodes))
-            add_nodes_for_job(jobname=job, nodes=addNodes)
-            delNodes = list(set(old_nodes) - set(intersectionNodes))
-            del_nodes_for_job(jobname=job, nodes=delNodes)
+            addNodes =list(set(new_nodes) - set(intersectionNodes)) # node to be added
+            print("add or delete node")
+            if addNodes:
+                add_nodes_for_job(jobname=job, nodes=addNodes)
+            
+            delNodes = list(set(old_nodes) - set(intersectionNodes)) # node to be deleted
+            if delNodes:
+                del_nodes_for_job(jobname=job, nodes=delNodes)
