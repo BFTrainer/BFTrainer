@@ -99,6 +99,7 @@ def generate_command(discover_file_path, jobname, job_info_dict):
     return command
 
 def del_job(jobname, job_info_dict):
+    print("del job called")
     # 1. check the pid is running
     job_pid = job_info_dict[jobname].pid
     if job_pid == -1:
@@ -125,30 +126,48 @@ def del_discover_files(jobname):
 
 # Node changes
 def add_nodes_for_job(jobname, nodes):
+    print("add nodes called")
     if len(nodes) == 0:
         return
-
-    host_file_path = os.path.join(WORKING_DIR, jobname + "_hostfile") 
-    if os.path.exists(host_file_path):
-        with open(host_file_path, 'a') as w:
+    
+    # discover host file
+    discover_file_path = os.path.join(WORKING_DIR, "discover_host_" + jobname + ".sh")
+    
+    # Write node info to discover file
+    if os.path.exists(discover_file_path):
+        with open(discover_file_path, 'a') as w:
             for node in nodes:
-                w.write(node + ":" + str(NUM_OF_GPUs_PER_NODE)  + "\n")
+                w.write("echo " + node + ":" + str(NUM_OF_GPUs_PER_NODE) + "\n")
+
+def is_line_contain_delete_nodes(line, nodes):
+    flag = False
+    for node in nodes:
+        if node in line:
+            flag = True
+            break
+    return flag
 
 def del_nodes_for_job(jobname, nodes):
+
+    print("delete node for job called")
     # del host from corresponding hostfile
-    host_file_path = os.path.join(WORKING_DIR, jobname + "_hostfile")
-    if os.path.exists(host_file_path):
+    discover_file_path = os.path.join(WORKING_DIR, "discover_host_" + jobname + ".sh")
+    if os.path.exists(discover_file_path):
+        # Read the file filtered out the delete node line and put it back
         lines = []
-        with open(host_file_path, 'r') as r:
+        with open(discover_file_path, 'r') as r:
             lines = r.readlines()
         
+        # filter out deleted nodes
         new_lines = []
-        for node in nodes:
-            for line in lines:
-                if node not in line:
-                    new_lines.append(line)
+        for line in lines:
+            if is_line_contain_delete_nodes(line, nodes) == False:
+                new_lines.append(line)
 
-        with open(host_file_path, 'a') as w:
+        print("new lines", new_lines)
+
+        # write back
+        with open(discover_file_path, 'w') as w:
             for line in new_lines:
                 w.write(line)
 
@@ -171,6 +190,9 @@ def adjust_nodes_by_map(new_map, old_map, job_info_dict):
 
     oldjobs.sort()
     newjobs.sort()
+
+    print("oldjob", oldjobs)
+    print("newjob", newjobs)
 
     if oldjobs != newjobs:
         for oldjob in oldjobs:

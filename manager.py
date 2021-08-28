@@ -1,5 +1,4 @@
 from itertools import groupby
-import socket
 from time import sleep
 from time import time
 import pandas as pd
@@ -173,19 +172,24 @@ class Manager:
         mins, maxs, Ns, Os, res_ups, res_dws = utils.get_optimizer_parameters_by_job_dict(self.job_info_dict)
 
         if flag == JobNodeStatus.NODEIN:
+            print("Node in")
             for node in nodes:
                self.current_map.insert(self.current_map.shape[1], node, 0) # dataframe add one new column
             tmpGRB, new_data, tmpRate, tmpCost = re_allocate(cmap=self.current_map.values, jmin=mins, jmax=maxs,
                                                                 Ns=Ns,Os=Os, Tfwd=10, res_up=res_ups, res_dw = res_dws, time_limit=10)
             new_map = pd.DataFrame(data=new_data, index=self.current_map.index, columns=self.current_map.columns)
         else:
+            print("node leave")
+            print("old map", self.current_map)
+            print(nodes)
             for node in nodes:
                 tmp_map = self.current_map.drop(labels=node, axis=1) # dataframe delete one column
 
             tmpGRB, new_data, tmpRate, tmpCost = re_allocate(cmap=tmp_map.values, jmin=mins, jmax=maxs,
                                                 Ns=Ns,Os=Os, Tfwd=10, res_up=res_ups, res_dw = res_dws, time_limit=10)
             new_map = pd.DataFrame(data=new_data, index=tmp_map.index, columns=tmp_map.columns)
-        
+            print("new map", new_map)
+
         managerOperations.adjust_nodes_by_map(new_map, old_map, self.job_info_dict)
 
         # update current_map
@@ -363,7 +367,7 @@ def main():
     m = Manager(max_parallel=MAXIMUM_PARALLEL, monitor_gap= 10)
 
     # run udp server and update job data
-    m.run_server_and_update_data()
+    # m.run_server_and_update_data()
 
     # start jobs
     print("before manager start")
@@ -371,10 +375,10 @@ def main():
     print("after manager start")
 
     # node leave
-    # sleep(40)
-    # print("node leave")
-    # m.scheduler_nodes_change(JobNodeStatus.NODEOUT, ["thetagpu21"])
-    
+    sleep(50)
+    print("node leave in main")
+    m.scheduler_nodes_change(JobNodeStatus.NODEOUT, ["thetagpu20"])
+
     # node in
     # m.scheduler_nodes_change(JobNodeStatus.NODEIN, ["node10"])
 
