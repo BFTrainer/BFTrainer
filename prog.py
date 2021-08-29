@@ -1,3 +1,4 @@
+import time
 import numpy as np
 import gurobipy as grb
 from scipy import interpolate
@@ -7,6 +8,9 @@ def interp1d4s(Ns, Os, Nx):
     return float(f(Nx))
 
 def re_allocate(cmap, jmin, jmax, Ns, Os, Tfwd, res_up, res_dw, time_limit): # tfwd 10 time_limit - 30 seconds
+    start_time = str(time.time())
+#    np.save(start_time + "before", cmap)
+
     nJ, nN = cmap.shape
     J = range(nJ)
     N = range(nN)
@@ -110,6 +114,7 @@ def re_allocate(cmap, jmin, jmax, Ns, Os, Tfwd, res_up, res_dw, time_limit): # t
     else:
         rate, cost = [], []
 
+#    np.save(start_time + "after", sol_map)
     return opt_mdl.Status, sol_map, np.array(rate), np.array(cost)
 
 def re_allocate_ndf(cmap, jmin, jmax, Ns, Os, res_up, res_dw):

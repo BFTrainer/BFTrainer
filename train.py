@@ -26,7 +26,7 @@ parser.add_argument('--num-warmup-batches', type=int, default=1,
                     help='number of warm-up batches that don\'t count towards benchmark')
 parser.add_argument('--num-batches-per-iter', type=int, default=10,
                     help='number of batches per benchmark iteration')
-parser.add_argument('--num-iters', type=int, default=100,
+parser.add_argument('--num-iters', type=int, default=100000,
                     help='number of benchmark iterations')
 parser.add_argument('--num-batches-per-commit', type=int, default=10,
                     help='number of batches per commit of the elastic state object')
@@ -123,15 +123,18 @@ def run_benchmark(state):
 
     if hvd.rank() == 0:
         print("create udp client")
-        mo = MessageOperator(address='172.23.2.192', port=9999)
+        mo = MessageOperator(address='172.23.2.194', port=9999)
 
     for x in range(state.iter, args.num_iters):
-        time = timeit.timeit(lambda: benchmark_step(state), number=args.num_batches_per_iter)
-        img_sec = args.batch_size * args.num_batches_per_iter / time
-        log('Iter #%d: %.1f img/sec per %s' % (x, img_sec, device))
+        # time = timeit.timeit(lambda: benchmark_step(state), number=args.num_batches_per_iter)
+        # tick = time.time()
+        benchmark_step(state)
+        # img_sec = args.batch_size * hvd.size() / tick
+        # log('Iter #%d: %.1f img/sec per %s' % (x, img_sec, device))
         if hvd.rank() == 0:
             mo.report(credit=args.batch_size * hvd.size(), rank_size = hvd.size())
-        state.img_secs.append(img_sec)
+        
+        state.img_secs.append(0)
         state.iter = x
         state.commit()
 

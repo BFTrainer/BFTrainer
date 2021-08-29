@@ -1,5 +1,5 @@
 import numpy as np
-import pandas as pd
+import time
 
 def frag_sampling(n):
     ref_segs = np.load('fragments.npy')
@@ -14,11 +14,9 @@ def frag_sampling(n):
     for i in range(n):
         bi = np.random.choice(range(len(bins_prob)), 1, p=bins_prob)
         ret[i] = np.random.rand() * (bin_edge[bi+1] - bin_edge[bi]) + bin_edge[bi]
-        
     return ret
 
 def synthetic_trace(nodes, nf):
-    trace_evt = pd.DataFrame([], columns=nodes)
     fragments = frag_sampling(nf)
     avg_frag = np.mean(fragments)
     
@@ -26,7 +24,7 @@ def synthetic_trace(nodes, nf):
     for i in range(nf):
         _nd = np.random.randint(0, len(nodes)) # node id
         _oc = np.random.poisson(10*avg_frag)   # occupied time
-        _oc = 120
+        _oc = 5
         if len(trace_cont[nodes[_nd]]) == 0:
             pfe = 0
         else:
@@ -34,7 +32,31 @@ def synthetic_trace(nodes, nf):
         trace_cont[nodes[_nd]].append((pfe + _oc, pfe + _oc + fragments[i]))      # frag start and end
     return trace_cont
 
-nodes = ['thetagpu%02d' % _ for _ in range(16)]
-trace_cont = synthetic_trace(nodes, nf=100)
+def create_events_base_on_trace(nodes, nf):
+    trace_cont = synthetic_trace(nodes, nf=100)
 
-print(trace_cont)
+    # for record the nodes status
+    counters = {}
+    flags = {}
+    for node in nodes:
+        counters[node] = 0
+        flags[node] = False
+
+    start_time = time.time()
+
+    while(True):
+        time.sleep(0.1)
+        relate_time = time.time() - start_time
+
+        for node in nodes:
+            timestamps_tuple = trace_cont[node] # list of tuple for node
+            current_time_tuple = timestamps_tuple[counters[node]]
+
+            if relate_time > current_time_tuple[0] and flags[node] == False:
+                print("node " + node + " in") # trigger node in event
+                flags[node] = True
+
+            if relate_time > current_time_tuple[1] and flags[node] == True:
+                print("node " + node + " leave") # trigger node leave event
+                flags[node] = False
+                counters[node] = counters[node] + 1

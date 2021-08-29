@@ -1,5 +1,7 @@
+from os import linesep
+import queue
 import socket
-import utils
+from queue import Queue
 
 # This address is for 
 # ADDRESS = '172.23.2.202' # thetagpu14
@@ -9,19 +11,33 @@ PORT = 9999
 
 class MSGOperations:
     def __init__(self) -> None:
-        self.buffer = []
+        self.buffer = Queue()
+
+        # TODO: ask about Dr. Liu how to use this
+        # create file
+        # self.log = open("msg.log", "w")
+
     # Sever - manager side
     def create_udp_server(self):
         try:
-            print("create udp server")
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.bind((ADDRESS, PORT))
+            print("create udp server success")
             while True:
                 data, addr = s.recvfrom(1024)
                 address_id = 'Address:%s ' % addr[0]
                 msg = address_id + str(data, encoding = "utf-8")
-                self.buffer.append(msg)
+                
+                # keep only around 500 items in the buffer
+                if self.buffer.qsize() <= 500:
+                    self.buffer.put(msg)
+                else:
+                    self.buffer.get() # remove as FIFO
+                    self.buffer.put(msg) # put a new one
+
+                # self.log.write(msg + '\n')
                 print(msg)
+                print("queue size: ", self.buffer.qsize())
         except Exception as ex:
             print("Create Server failed")
             print(ex)

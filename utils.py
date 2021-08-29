@@ -138,4 +138,3 @@ def get_host_name_by_address(address):
     # this resolve is specific for thetagpu cluster
     hostname = host_tuple[0].split(".")[0]
     return hostname
-

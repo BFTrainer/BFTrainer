@@ -14,9 +14,10 @@ from msgOperations import MSGOperations
 import sys_admin
 from threading import Thread
 
-MAXIMUM_PARALLEL = 2
+MAXIMUM_PARALLEL = 2 # 
+
 MONITOR_GAP = 5
-NUM_OF_GPUs_PER_NODE = 1
+NUM_OF_GPUs_PER_NODE = 8 # 
 
 class JobNodeStatus(Enum):
     JOBFAILED=0
@@ -291,13 +292,16 @@ class Manager:
         if res_down != None:
             job_item.res_down = res_down
 
+# Maintain a FIFO queue(maximum size 200)
+# group message base on job ()
+
     def update_job_data(self, mserver):
         print("start dynamic update Ns/Os and resup and down data")
         while True:
             sleep(20) # pin gap
             print("update data every 20 seconds")
             msg_items = []
-            msg_list = mserver.buffer
+            msg_list = list(mserver.buffer.queue)
 
             if len(msg_list) == 0:
                 continue
@@ -307,7 +311,6 @@ class Manager:
                 msg_items.append(msg_item)
 
             # group by address
-            # ??? every time we sort and group by (is this is necessary??)
             msg_items.sort(key=lambda x: x.address)
             group_items = groupby(msg_items, lambda x: x.address)
             
@@ -322,6 +325,7 @@ class Manager:
             print("group dict", group_dict)
 
             print("cmap in update job data:", self.current_map)
+            
             # get N and O
             for jobname in group_dict:
                 job_items = group_dict[jobname]
@@ -358,7 +362,8 @@ class Manager:
                 
                 print("res_up",res_up)
                 print("res_dw",res_dw)
-
+            
+            # Update collect info to JobInfoDict
             self.dynamic_update_job_data(jobname=jobname, N=N, O=O, res_up=res_up, res_down=res_dw)
 
     def run_server_and_update_data(self):
@@ -374,6 +379,7 @@ class Manager:
         p_updater.start()
 
 def main():
+
     # create manager
     m = Manager(max_parallel=MAXIMUM_PARALLEL, monitor_gap= 10)
 
@@ -387,19 +393,21 @@ def main():
 
     print("========================================")
     
+    '''
     # node leave
     sleep(40)
     print("node leave in main")
-    m.scheduler_nodes_change(JobNodeStatus.NODEOUT, ["thetagpu16"])
+    m.scheduler_nodes_change(JobNodeStatus.NODEOUT, ["thetagpu04"])
 
     # node in
     sleep(40)
     print("node come back in main")
-    m.scheduler_nodes_change(JobNodeStatus.NODEIN, ["thetagpu16"])
+    m.scheduler_nodes_change(JobNodeStatus.NODEIN, ["thetagpu04"])
 
     # Process for monitor jobs job pids
     p_monitor = Thread(target=m.monitor_hvd_processes)
     p_monitor.start()
+    '''
 
 if __name__ == "__main__":
     main()
