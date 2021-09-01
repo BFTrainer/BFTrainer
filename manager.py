@@ -1,4 +1,5 @@
 from itertools import groupby
+from queue import Queue
 import time
 
 import pandas as pd
@@ -17,8 +18,8 @@ import trace_generator
 
 MAXIMUM_PARALLEL = 2 # 
 
-MONITOR_GAP = 5
-NUM_OF_GPUs_PER_NODE = 8 # 
+MONITOR_GAP = 10
+NUM_OF_GPUs_PER_NODE = 1 # 
 
 class JobNodeStatus(Enum):
     JOBFAILED=0
@@ -31,6 +32,7 @@ class Manager:
         self.max_parallel = max_parallel
         self.monitor_gap = monitor_gap
         self.create_working_directory()
+        self.buffer = Queue()
 
     current_map = pd.DataFrame()
     # A dictionary for global job information
@@ -63,7 +65,7 @@ class Manager:
         Args:
             func (func pointer): Client need to offer a function to get the real time training speed
         """
-        return MSGOperations().create_udp_client(address, port)
+        return MSGOperations().create_msg_client(address, port)
 
     def create_msg_server(self): # pass dynamic update data function into 
         """Create a message server for receive throughput report by client
@@ -75,7 +77,8 @@ class Manager:
 
     # life cycle functions
     def _managerStart(self):
-        sys_nodes=sys_admin.get_avaliable_nodes_from_system()
+        print("manager start called")
+        sys_nodes=sys_admin.get_cluster_nodes()
         print("start mark1")
         if len(sys_nodes) == 0 or (sys_nodes is None):
             print("No nodes avaliable")
@@ -116,6 +119,8 @@ class Manager:
         managerOperations.adjust_nodes_by_map(new_map=new_map, old_map=initialMap, job_info_dict = self.job_info_dict)
         print("start mark7")
         self.current_map = new_map
+        print("manager start end")
+        print("=========================")
 
     def scheduler_job_change(self, GUIDs):
         # 1. Detect job leave
@@ -154,6 +159,9 @@ class Manager:
 
     def scheduler_nodes_change(self, flag, nodes):
         print("node change called")
+
+        self.update_job_data_on_events(self.buffer)
+
         # validate nodes name before operations 
         if sys_admin.is_nodes_belong_to_avaliable_nodes(nodes) == False:
             print("error: nodes out of avaliable nodes range")
@@ -278,16 +286,79 @@ class Manager:
         if res_down != None:
             job_item.res_down = res_down
 
-# Maintain a FIFO queue(maximum size 200)
-# group message base on job ()
+    def update_job_data_on_events(self, mserver):
+        print("start dynamic update Ns/Os and resup and down data on events")
 
-    def update_job_data(self, mserver):
+        msg_items = []
+        msg_list = list(mserver.queue)
+        print("==================")
+        print(msg_list)
+
+        if len(msg_list) == 0:
+            return
+
+        for msg in msg_list:
+            msg_item = utils.parser_udp_message(msg)
+            msg_items.append(msg_item)
+
+        # group by address
+        msg_items.sort(key=lambda x: x.address)
+        group_items = groupby(msg_items, lambda x: x.address)
+        
+        group_dict = {} # key:job val:group of iterations info for this job
+        for key, group in group_items:
+            hostname = utils.get_host_name_by_address(key)
+            print("====hostname====:", hostname)
+            jobname = utils.get_jobname_by_hostname(hostname, self.current_map)
+            print("jobname", jobname)
+            group_dict[jobname] = list(group)
+
+        # get N and O
+        for jobname in group_dict:
+            job_items = group_dict[jobname]
+            job_items.sort(key=lambda x: x.rank_size)
+            group_job_items = groupby(job_items, lambda x: x.rank_size)
+            
+            print(group_job_items)
+
+            N = []
+            O = []
+            for key, group in group_job_items: # key: different rank size for job - group: items of this job with this ranksize
+                node_num = int(key)/NUM_OF_GPUs_PER_NODE
+                N.append(int(node_num))
+                group_list = list(group)
+                avg = sum([float(x.credit) for x in group_list])/len(group_list)
+                O.append(avg)
+
+            # get res_up and res_down
+            job_items.sort(key=lambda x: x.id)
+            res_up = None
+            res_dw = None
+            if len(job_items) > 2:
+                print("update res up and down")
+                for i in range(len(job_items)-1,-1,-1): # reverse order find rank difference
+                    if job_items[i].rank_size > job_items[i-1].rank_size and job_items[i-1].rank_size == job_items[i-2].rank_size:
+                        print("================ get the res_up cost ===================")
+                        res_up = (job_items[i].time - job_items[i-1].time) - (job_items[i-1].time - job_items[i-2].time)
+                    elif job_items[i].rank_size < job_items[i-1].rank_size:
+                        print("================ get the res_down cost =================")
+                        res_dw = (job_items[i].time - job_items[i-1].time) - (job_items[i-1].time - job_items[i-2].time)
+            
+            print("res_up",res_up)
+            print("res_dw",res_dw)
+        
+        # Update collect info to JobInfoDict
+        self.dynamic_update_job_data(jobname=jobname, N=N, O=O, res_up=res_up, res_down=res_dw)
+
+    def update_job_data_on_freq(self, mserver):
         print("start dynamic update Ns/Os and resup and down data")
         while True:
-            time.sleep(20) # pin gap
-            print("update data every 20 seconds")
+            time.sleep(10) # pin gap
+            print("update data every 10 seconds")
             msg_items = []
-            msg_list = list(mserver.buffer.queue)
+            msg_list = list(mserver.queue)
+            print("==================")
+            print(msg_list)
 
             if len(msg_list) == 0:
                 continue
@@ -329,9 +400,6 @@ class Manager:
                     avg = sum([float(x.credit) for x in group_list])/len(group_list)
                     O.append(avg)
 
-                print(N)
-                print(O)
-
                 # get res_up and res_down
                 job_items.sort(key=lambda x: x.id)
                 res_up = None
@@ -352,75 +420,88 @@ class Manager:
             # Update collect info to JobInfoDict
             self.dynamic_update_job_data(jobname=jobname, N=N, O=O, res_up=res_up, res_down=res_dw)
 
-    def run_server_and_update_data(self):
+    def run_msg_server(self):
         # run server daemon
         print("run server and update data")
         mserver=MSGOperations()
-        p_server = Thread(target=mserver.create_udp_server)
+        self.buffer = mserver.buffer
+
+        p_server = Thread(target=mserver.create_msg_server) # keep updating buffer data
         p_server.start()
 
-        print("start run update job data")
-        # run update daemon
-        p_updater = Thread(target=self.update_job_data, args=(mserver,))
-        p_updater.start()
-    
-    def events_process(self, trace):
-        print("event process called")
-        print(trace)
-        nodes = trace.keys()
+    # node come and leave
+    def events_launcher(self):
+        print("=== event launcher called, process entrance ===")
 
+        self._managerStart()
+
+        # create events source
+        cluster_nodes = sys_admin.get_cluster_nodes()
+        trace = trace_generator.synthetic_trace(nodes=cluster_nodes, nf=100)
+        print(trace)
+
+        # record the status of nodes in arrary for controlling events      
         counters = {}
         flags = {}
-        
-        for node in nodes:
+        for node in cluster_nodes:
             counters[node] = 0
             flags[node] = False
 
         start_time = time.time()
 
+        # events tick driver
         while(True):
-            time.sleep(0.1)
-            relate_time = time.time() - start_time
+            time.sleep(0.1) # check each 0.1 second(could change)
+            
+            passing_time = time.time() - start_time
 
-            for node in nodes:
+            coming_nodes = [] # coming nodes in one time check
+            leaving_nodes = [] # leaving nodes in one time check
+
+            for node in cluster_nodes:
                 timestamps_tuple = trace[node] # list of tuple for node
                 current_time_tuple = timestamps_tuple[counters[node]]
 
-                if relate_time > current_time_tuple[0] and flags[node] == False:
+                if passing_time > current_time_tuple[0] and flags[node] == False:
                     print("node: " + node + " in") # trigger node in event
-                    self.scheduler_nodes_change(JobNodeStatus.NODEIN, [node])
+                    coming_nodes.append(node)
                     flags[node] = True
 
-                if relate_time > current_time_tuple[1] and flags[node] == True:
+                if passing_time > current_time_tuple[1] and flags[node] == True:
                     print("node: " + node + " leave") # trigger node leave event
-                    self.scheduler_nodes_change(JobNodeStatus.NODEOUT, [node])
+                    leaving_nodes.append(node)
                     flags[node] = False
                     counters[node] = counters[node] + 1
+            
+            # when node counter == 0 that is the start, just skip the start phase
+            if coming_nodes and list(counters.values())[0] != 0: 
+                self.scheduler_nodes_change(JobNodeStatus.NODEIN, coming_nodes)
+
+            if leaving_nodes:
+                self.scheduler_nodes_change(JobNodeStatus.NODEOUT, leaving_nodes)
 
 def main():
 
     # create manager
     m = Manager(max_parallel=MAXIMUM_PARALLEL, monitor_gap= 10)
+    
+    # 1. create server ready to recv data
+    m.run_msg_server()
 
-    # Run UDP server and collect training information
-    m.run_server_and_update_data()
+    # print("start run update job data")
+    # p_updater = Thread(target=m.update_job_data_on_freq, args=(m.buffer,)) # for debugging
+    # p_updater.start()
 
-    # start jobs
-    print("before manager start")
-    m._managerStart()
-    print("after manager start")
-
-    print("========================================")
-
-    '''
-    # Events
-    nodes = sys_admin.get_avaliable_nodes_from_system()
-    trace = trace_generator.synthetic_trace(nodes=nodes, nf=100)
-    m.events_process(trace)
-    # new process run events process
-    p_events = Thread(target=m.events_process, args=(trace,))
+    # 2. start jobs and run as events come
+    p_events = Thread(target=m.events_launcher)
     p_events.start()
-
+    
+    # 3. process monitor job pid
+    p_monitor = Thread(target=m.monitor_hvd_processes)
+    p_monitor.start()
+    
+    '''
+    # Debug segments
     # node leave
     sleep(40)
     print("================= node leave =======================")

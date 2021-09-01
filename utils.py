@@ -114,7 +114,6 @@ def get_jobname_by_hostname(hostname, cmap):
 def parser_udp_message(msg):
     if msg == None or len(msg) == 0:
         return
-    print(msg)
     items = msg.split(" ")
     address = items[0].split(":")[-1]
     id = items[1].split(":")[-1]

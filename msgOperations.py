@@ -16,7 +16,7 @@ class MSGOperations:
         # self.log = open("msg.log", "w")
 
     # Sever - manager side
-    def create_udp_server(self):
+    def create_msg_server(self):
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.bind((ADDRESS, PORT))
@@ -41,7 +41,7 @@ class MSGOperations:
             print(ex)
             s.close()
     # Client
-    def create_udp_client(self, address, port):
+    def create_msg_client(self, address, port):
         """Create udp client
         Args:
             address (str): msg address
