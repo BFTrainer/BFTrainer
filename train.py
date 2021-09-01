@@ -8,8 +8,7 @@ import horovod.torch as hvd
 import timeit
 import numpy as np
 import time
-from manager import Manager
-from manager import MessageOperator
+from msgOperator import MessageOperator
 
 # Benchmark settings
 parser = argparse.ArgumentParser(description='PyTorch Synthetic Benchmark',
@@ -123,7 +122,7 @@ def run_benchmark(state):
 
     if hvd.rank() == 0:
         print("create udp client")
-        mo = MessageOperator(address='172.23.2.194', port=9999)
+        mo = MessageOperator(address='172.23.2.192', port=9999)
 
     for x in range(state.iter, args.num_iters):
         # time = timeit.timeit(lambda: benchmark_step(state), number=args.num_batches_per_iter)

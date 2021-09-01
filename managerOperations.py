@@ -178,9 +178,9 @@ def adjust_nodes_by_map(new_map, old_map, job_info_dict):
     # map to dict
     old_job_nodes_dict = utils.get_job_nodes_mapping_from(old_map)
     new_job_nodes_dict = utils.get_job_nodes_mapping_from(new_map)
-    
-    print("old dict",old_job_nodes_dict)
-    print("new dict",new_job_nodes_dict)
+
+    print("old job node dict",old_job_nodes_dict)
+    print("new job node dict",new_job_nodes_dict)
     
     # Adjustment on job level
     oldjobs = list(old_job_nodes_dict.keys())
@@ -192,25 +192,26 @@ def adjust_nodes_by_map(new_map, old_map, job_info_dict):
     print("oldjob", oldjobs)
     print("newjob", newjobs)
 
-    if oldjobs != newjobs:
+    # Job level adjustment
+    if oldjobs != newjobs: # jobs changed
         for oldjob in oldjobs:
-            if oldjob not in newjobs:
-                del_job(oldjob) 
+            if oldjob not in newjobs: # job in old not in new (del this job)
+                del_job(oldjob)
         
         for newjob in newjobs:
-            if newjob not in oldjobs:
-                print("mark 1 add job before")
+            if newjob not in oldjobs: # job in new not in old (add this job)
                 add_job(newjob, new_job_nodes_dict[newjob], job_info_dict)
-                print("makr 1 add job after")
     
-    # Adjustment on node level
+    # Node level adjustment
     overlappedJobs = utils.get_lists_overlap(newjobs, oldjobs)
 
     # for each job check node changes
+    # Only jobs in both old and new(overlabppedJobs) have node level changes
     for job in overlappedJobs:
         old_nodes = old_job_nodes_dict[job]
         new_nodes = new_job_nodes_dict[job]
-        # nothing changed skip
+        
+        # check diff
         if set(old_nodes) != set(new_nodes):
             # pid = -1 means this job never launched before
             # len(old_nodes) == 0 means the no node assigned for this job
@@ -221,7 +222,6 @@ def adjust_nodes_by_map(new_map, old_map, job_info_dict):
             # job existed adjust nodes only
             intersectionNodes = utils.get_lists_overlap(old_nodes, new_nodes)
             addNodes =list(set(new_nodes) - set(intersectionNodes)) # node to be added
-            print("add or delete node")
             if addNodes:
                 add_nodes_for_job(jobname=job, nodes=addNodes)
             

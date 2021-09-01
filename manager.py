@@ -1,6 +1,6 @@
 from itertools import groupby
-from time import sleep
-from time import time
+import time
+
 import pandas as pd
 from enum import Enum
 from collections import OrderedDict
@@ -13,6 +13,7 @@ import managerOperations
 from msgOperations import MSGOperations
 import sys_admin
 from threading import Thread
+import trace_generator
 
 MAXIMUM_PARALLEL = 2 # 
 
@@ -24,22 +25,6 @@ class JobNodeStatus(Enum):
     JOBOUT=1
     NODEIN=2
     NODEOUT=3
-
-class MessageOperator:
-    def __init__(self, address, port) -> None:
-        self.address = address
-        self.port = port
-        self.socket = Manager().create_msg_client(address, port)
-        self.sequence_id = 0
-
-    def report(self, credit, rank_size):
-        t = time()
-        report_msg = 'id:%d time:%f rank_size:%d credit:%s' % (self.sequence_id, t, rank_size, credit)
-        self.sequence_id += 1
-        try:
-            self.socket.sendto(str.encode(report_msg), (self.address, self.port))
-        except Exception as ex:
-            self.socket.close()
 
 class Manager:
     def __init__(self, max_parallel = MAXIMUM_PARALLEL, monitor_gap = MONITOR_GAP):
@@ -133,7 +118,7 @@ class Manager:
         self.current_map = new_map
 
     def scheduler_job_change(self, GUIDs):
-        # 1.job leave
+        # 1. Detect job leave
         for GUID in GUIDs:
             # 1.1 Drop job from current map
             self.current_map.drop([GUID], inplace=True)
@@ -168,7 +153,7 @@ class Manager:
         self.current_map = new_map
 
     def scheduler_nodes_change(self, flag, nodes):
-        
+        print("node change called")
         # validate nodes name before operations 
         if sys_admin.is_nodes_belong_to_avaliable_nodes(nodes) == False:
             print("error: nodes out of avaliable nodes range")
@@ -202,6 +187,7 @@ class Manager:
         # update current_map
         self.current_map = new_map
 
+    # for future use
     def _terminate_manager(self):
         # kill all horovodrun process in dictionary
         for job in self.job_info_dict:
@@ -217,7 +203,7 @@ class Manager:
 
         while True:
             print("============= monitor report ===============")
-            sleep(self.monitor_gap) # check every 15s
+            time.sleep(self.monitor_gap) # check every 15s
             for jobname in self.job_info_dict.keys():
                 pid = self.job_info_dict[jobname].pid
                 if not psutil.pid_exists(pid):
@@ -298,7 +284,7 @@ class Manager:
     def update_job_data(self, mserver):
         print("start dynamic update Ns/Os and resup and down data")
         while True:
-            sleep(20) # pin gap
+            time.sleep(20) # pin gap
             print("update data every 20 seconds")
             msg_items = []
             msg_list = list(mserver.buffer.queue)
@@ -322,9 +308,9 @@ class Manager:
                 print("jobname", jobname)
                 group_dict[jobname] = list(group)
 
-            print("group dict", group_dict)
+            # print("group dict", group_dict)
 
-            print("cmap in update job data:", self.current_map)
+            # print("cmap in update job data:", self.current_map)
             
             # get N and O
             for jobname in group_dict:
@@ -377,14 +363,47 @@ class Manager:
         # run update daemon
         p_updater = Thread(target=self.update_job_data, args=(mserver,))
         p_updater.start()
+    
+    def events_process(self, trace):
+        print("event process called")
+        print(trace)
+        nodes = trace.keys()
+
+        counters = {}
+        flags = {}
+        
+        for node in nodes:
+            counters[node] = 0
+            flags[node] = False
+
+        start_time = time.time()
+
+        while(True):
+            time.sleep(0.1)
+            relate_time = time.time() - start_time
+
+            for node in nodes:
+                timestamps_tuple = trace[node] # list of tuple for node
+                current_time_tuple = timestamps_tuple[counters[node]]
+
+                if relate_time > current_time_tuple[0] and flags[node] == False:
+                    print("node: " + node + " in") # trigger node in event
+                    self.scheduler_nodes_change(JobNodeStatus.NODEIN, [node])
+                    flags[node] = True
+
+                if relate_time > current_time_tuple[1] and flags[node] == True:
+                    print("node: " + node + " leave") # trigger node leave event
+                    self.scheduler_nodes_change(JobNodeStatus.NODEOUT, [node])
+                    flags[node] = False
+                    counters[node] = counters[node] + 1
 
 def main():
 
     # create manager
     m = Manager(max_parallel=MAXIMUM_PARALLEL, monitor_gap= 10)
 
-    # run udp server and update job data
-    m.run_server_and_update_data() # The server report data is used to update jobInfoDict
+    # Run UDP server and collect training information
+    m.run_server_and_update_data()
 
     # start jobs
     print("before manager start")
@@ -392,15 +411,25 @@ def main():
     print("after manager start")
 
     print("========================================")
-    
+
     '''
+    # Events
+    nodes = sys_admin.get_avaliable_nodes_from_system()
+    trace = trace_generator.synthetic_trace(nodes=nodes, nf=100)
+    m.events_process(trace)
+    # new process run events process
+    p_events = Thread(target=m.events_process, args=(trace,))
+    p_events.start()
+
     # node leave
     sleep(40)
-    print("node leave in main")
+    print("================= node leave =======================")
+    print("sleep 40 Seconds and Node leave in main")
     m.scheduler_nodes_change(JobNodeStatus.NODEOUT, ["thetagpu04"])
 
     # node in
     sleep(40)
+    print("=================== node in ======================")
     print("node come back in main")
     m.scheduler_nodes_change(JobNodeStatus.NODEIN, ["thetagpu04"])
 

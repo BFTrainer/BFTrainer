@@ -1,5 +1,3 @@
-from os import linesep
-import queue
 import socket
 from queue import Queue
 
@@ -36,8 +34,8 @@ class MSGOperations:
                     self.buffer.put(msg) # put a new one
 
                 # self.log.write(msg + '\n')
-                print(msg)
-                print("queue size: ", self.buffer.qsize())
+                # print(msg)
+                # print("queue size: ", self.buffer.qsize())
         except Exception as ex:
             print("Create Server failed")
             print(ex)
