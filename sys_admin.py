@@ -1,6 +1,6 @@
 import utils
 
-def get_avaliable_nodes_from_system():
+def get_cluster_nodes():
     """The system will offer a api for getting the
         avaliable resources
 
@@ -8,10 +8,22 @@ def get_avaliable_nodes_from_system():
         list: a list of avaliable nodes
     """
     if utils.is_theta_cluster():
-        nodelist = ["thetagpu12","thetagpu13","thetagpu18","thetagpu19"]
+        # nodelist = ["thetagpu02","thetagpu06","thetagpu14","thetagpu16"]
+        nodelist = ["thetagpu02","thetagpu03","thetagpu04","thetagpu06",
+        "thetagpu09","thetagpu11","thetagpu12","thetagpu13","thetagpu14",
+        "thetagpu15","thetagpu16","thetagpu18","thetagpu19","thetagpu20",
+        "thetagpu21"]
+
     else:
-        nodelist = ["node07", "node08", "node09", "node10"]
+        nodelist = ["node01", "node02", "node03", "node04"]
     return nodelist
+
+def is_nodes_belong_to_avaliable_nodes(nodes):
+    ava_nodes = get_cluster_nodes()
+    for node in nodes:
+        if node not in ava_nodes:
+            return False
+    return True
 
 def monitor_hvd_processes():
     # trigger job change

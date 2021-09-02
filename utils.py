@@ -103,7 +103,10 @@ def get_job_nodes_mapping_from(cmap):
     return dict
 
 def get_jobname_by_hostname(hostname, cmap):
+    print("get_jobname_by_host_name() called")
     jobnodesdict = get_job_nodes_mapping_from(cmap)
+    
+    jobname = ""
     for jn in jobnodesdict:
         nodes = jobnodesdict[jn]
         if hostname in nodes:

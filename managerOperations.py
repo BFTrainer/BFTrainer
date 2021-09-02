@@ -6,7 +6,7 @@ import utils
 import psutil
 import stat
 
-NUM_OF_GPUs_PER_NODE = 1
+NUM_OF_GPUs_PER_NODE = 8
 WORKING_DIR = utils.working_dir()
 
 def create_working_directory():
@@ -43,10 +43,10 @@ def get_a_job_from_DB():
         return None
 
 def create_msg_client(address, port):
-    return MSGOperations().create_udp_client(address, port)
+    return MSGOperations().create_msg_client(address, port)
 
 def create_msg_server(): # pass dynamic update data function into 
-    MSGOperations().create_udp_server()
+    MSGOperations().create_msg_server()
 
 def add_job(jobname, nodes, job_info_dict):
     print("Add job was called")
@@ -161,8 +161,6 @@ def del_nodes_for_job(jobname, nodes):
         for line in lines:
             if is_line_contain_delete_nodes(line, nodes) == False:
                 new_lines.append(line)
-
-        print("new lines", new_lines)
 
         # write back
         with open(discover_file_path, 'w') as w:

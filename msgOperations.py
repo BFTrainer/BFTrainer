@@ -11,9 +11,8 @@ class MSGOperations:
     def __init__(self) -> None:
         self.buffer = Queue()
 
-        # TODO: ask about Dr. Liu how to use this
         # create file
-        # self.log = open("msg.log", "w")
+        self.log = open("msg.log", "w")
 
     # Sever - manager side
     def create_msg_server(self):
@@ -33,7 +32,8 @@ class MSGOperations:
                     self.buffer.get() # remove as FIFO
                     self.buffer.put(msg) # put a new one
 
-                # self.log.write(msg + '\n')
+                self.log.write(msg + '\n')
+                self.log.flush()
                 # print(msg)
                 # print("queue size: ", self.buffer.qsize())
         except Exception as ex:

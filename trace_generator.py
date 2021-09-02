@@ -24,7 +24,7 @@ def synthetic_trace(nodes, nf):
     for i in range(nf):
         _nd = np.random.randint(0, len(nodes)) # node id
         _oc = np.random.poisson(10*avg_frag)   # occupied time
-        _oc = 5
+        _oc = 120
         if len(trace_cont[nodes[_nd]]) == 0:
             pfe = 0
         else:

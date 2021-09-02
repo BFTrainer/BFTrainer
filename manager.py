@@ -16,10 +16,10 @@ import sys_admin
 from threading import Thread
 import trace_generator
 
-MAXIMUM_PARALLEL = 2 # 
+MAXIMUM_PARALLEL = 5 # 
 
 MONITOR_GAP = 10
-NUM_OF_GPUs_PER_NODE = 1 # 
+NUM_OF_GPUs_PER_NODE = 8 #
 
 class JobNodeStatus(Enum):
     JOBFAILED=0
@@ -77,9 +77,8 @@ class Manager:
 
     # life cycle functions
     def _managerStart(self):
-        print("manager start called")
+        print("manager start")
         sys_nodes=sys_admin.get_cluster_nodes()
-        print("start mark1")
         if len(sys_nodes) == 0 or (sys_nodes is None):
             print("No nodes avaliable")
             return
@@ -88,7 +87,6 @@ class Manager:
             print("No valid jobs")
             return
         
-        print("start mark2")
         # fetch job from DB
         starting_jobs_num = min(MAXIMUM_PARALLEL, self.get_job_queue_len())
         for i in range(starting_jobs_num):
@@ -96,18 +94,14 @@ class Manager:
             jobdetail = utils.parser_job_string_2_job_item(job_string)
             self.job_info_dict[jobdetail.GUID] = jobdetail
         
-        print("start mark3")
         # build inital map
         jobnames = self.job_info_dict.keys()
         data = np.zeros((len(jobnames), len(sys_nodes)), dtype=int) # initial fake data
         initialMap = pd.DataFrame(data=data, index=jobnames, columns=sys_nodes)
-        
-        print("start mark4")
 
         # Feed the optimizer and get the optimized newmap
         mins, maxs, Ns, Os, res_ups, res_dws = utils.get_optimizer_parameters_by_job_dict(self.job_info_dict)
 
-        print("start mark5")
         tmpGRB, new_data, tmpRate, tmpCost = re_allocate(cmap=initialMap.values, jmin=mins, jmax=maxs,
                                                             Ns=Ns,Os=Os, Tfwd=10, res_up=res_ups, res_dw = res_dws, 
                                                             time_limit=10)
@@ -115,27 +109,35 @@ class Manager:
 
         new_map = pd.DataFrame(data=new_data, index=jobnames, columns=sys_nodes)
 
-        print("start mark6")
         managerOperations.adjust_nodes_by_map(new_map=new_map, old_map=initialMap, job_info_dict = self.job_info_dict)
-        print("start mark7")
         self.current_map = new_map
         print("manager start end")
         print("=========================")
 
     def scheduler_job_change(self, GUIDs):
+        
+        # update buffer info to job_info_dict
+        self.update_job_data_on_events(self.buffer)
+        
         # 1. Detect job leave
         for GUID in GUIDs:
+            print("GUID: ", GUID)
+            print("GUID Type: ", type(GUID))
             # 1.1 Drop job from current map
             self.current_map.drop([GUID], inplace=True)
             # 1.2 Delete jobInfo from jobInfo dictionary
             self.job_info_dict.pop(GUID)
 
         # 2. fetch jobs to max parallel(batch manner)
+        print("job leaving after and fetch before job_info_dict: ", self.job_info_dict)
+        print("fetching job to max parallel")
+
         job_string_list = []
         lacking_len = self.max_parallel - len(self.job_info_dict)
         job_num = min(lacking_len, self.get_job_queue_len())
         for i in range(job_num):
             jobstring = self._get_a_job_from_DB()
+            print("fetch new job: ", jobstring)
             job_string_list.append(jobstring)
             jobdetail = utils.parser_job_string_2_job_item(jobstring)
             newrow = pd.DataFrame([np.zeros(len(self.current_map.columns), dtype=int)], index=[jobdetail.GUID] ,columns=self.current_map.columns)
@@ -144,6 +146,9 @@ class Manager:
             # add new job to dict
             self.job_info_dict[jobdetail.GUID] = jobdetail
 
+        print("after fetching new job get the new current map")
+        print(self.current_map)
+        
         # get parameters with latest `job_info_dict`
         mins, maxs, Ns, Os, res_ups, res_dws = utils.get_optimizer_parameters_by_job_dict(self.job_info_dict)
 
@@ -160,6 +165,9 @@ class Manager:
     def scheduler_nodes_change(self, flag, nodes):
         print("node change called")
 
+        # Event driven update data here
+        # Use buffer data and get ns os and res_up and res_dw
+        # 
         self.update_job_data_on_events(self.buffer)
 
         # validate nodes name before operations 
@@ -170,6 +178,9 @@ class Manager:
         # drop or add columns for nodes in cmap
         old_map = self.current_map
         mins, maxs, Ns, Os, res_ups, res_dws = utils.get_optimizer_parameters_by_job_dict(self.job_info_dict)
+
+        print("Ns Os res_ups res_dw")
+        print(Ns, Os, res_ups, res_dws)
 
         if flag == JobNodeStatus.NODEIN:
             print("node in")
@@ -206,28 +217,30 @@ class Manager:
         for job in self.job_info_dict:
             managerOperations.del_host_files(jobname=job)
     
-    # TODO: change the way triggering re-allocation
     def monitor_hvd_processes(self):
-
         while True:
-            print("============= monitor report ===============")
+            print("============= monitor hvd process report ===============")
             time.sleep(self.monitor_gap) # check every 15s
+            jobnames = []
             for jobname in self.job_info_dict.keys():
+
                 pid = self.job_info_dict[jobname].pid
+                print("dict stored hvd pid: %s - %s" % (jobname, pid))
+
                 if not psutil.pid_exists(pid):
-                    self.scheduler_job_change(GUIDs=jobname)
-            print("============= monitor report ===============")
+                    print("Hey! we found hvdrun process %s not existed anymore, so we start fetch new jobs", pid)
+                    jobnames.append(jobname)
+
+            if jobnames:
+                print("jobnames", jobnames)
+                self.scheduler_job_change(GUIDs=jobnames)
+
+            print("============= monitor hvd process report ===============")
     
     def merge_ordered_NO_2_itemNO(self, job_N, job_O, N, O):
-        print("====== Merge ordered NO 2 itemNO called ========")
         # Switch job_N and job_O to a dict
-
-        print('print four items: ', job_N, job_O, N, O)
-
         item_no_dict = {}
         for i in range(len(job_N)):
-            print("key job Ni", job_N[i])
-            print("val job Oi", job_O[i])
             item_no_dict[job_N[i]] = job_O[i]
 
         # insert N and O to the tmp dict
@@ -240,17 +253,15 @@ class Manager:
         # Sort the merged dict
         ordered_job_dict = OrderedDict(sorted(item_no_dict.items()))
 
-        print("ordered job dict", ordered_job_dict)
-
         # convert back to N and O (ordered)
-        res_N = list(ordered_job_dict.keys())
-        res_O = list(ordered_job_dict.values())
+        Ns = list(ordered_job_dict.keys())
+        Os = list(ordered_job_dict.values())
 
         # print res_N and res_O
-        print("res_N", res_N)
-        print("res_O", res_O)
+        print("Ns: ", Ns)
+        print("Os: ", Os)
 
-        return res_N, res_O
+        return Ns, Os
 
     def dynamic_update_job_data(self, jobname, N=None, O=None, res_up = None, res_down = None):
         """
@@ -291,8 +302,7 @@ class Manager:
 
         msg_items = []
         msg_list = list(mserver.queue)
-        print("==================")
-        print(msg_list)
+        print("========msg list length %d ==========" % len(msg_list))
 
         if len(msg_list) == 0:
             return
@@ -308,9 +318,10 @@ class Manager:
         group_dict = {} # key:job val:group of iterations info for this job
         for key, group in group_items:
             hostname = utils.get_host_name_by_address(key)
-            print("====hostname====:", hostname)
             jobname = utils.get_jobname_by_hostname(hostname, self.current_map)
-            print("jobname", jobname)
+            if jobname == "":
+                continue
+            print("update data event get name by address -- hostname: %s job name: %s" % (hostname, jobname))
             group_dict[jobname] = list(group)
 
         # get N and O
@@ -339,13 +350,15 @@ class Manager:
                 for i in range(len(job_items)-1,-1,-1): # reverse order find rank difference
                     if job_items[i].rank_size > job_items[i-1].rank_size and job_items[i-1].rank_size == job_items[i-2].rank_size:
                         print("================ get the res_up cost ===================")
-                        res_up = (job_items[i].time - job_items[i-1].time) - (job_items[i-1].time - job_items[i-2].time)
+                        res_up = (float(job_items[i].time) - float(job_items[i-1].time)) - (float(job_items[i-1].time) - float(job_items[i-2].time))
                     elif job_items[i].rank_size < job_items[i-1].rank_size:
                         print("================ get the res_down cost =================")
-                        res_dw = (job_items[i].time - job_items[i-1].time) - (job_items[i-1].time - job_items[i-2].time)
+                        print(type(job_items[i].time))
+                        print(job_items[i].time)
+                        res_dw = (float(job_items[i].time) - float(job_items[i-1].time)) - (float(job_items[i-1].time) - float(job_items[i-2].time))
             
-            print("res_up",res_up)
-            print("res_dw",res_dw)
+            print("res_up", res_up)
+            print("res_dw", res_dw)
         
         # Update collect info to JobInfoDict
         self.dynamic_update_job_data(jobname=jobname, N=N, O=O, res_up=res_up, res_down=res_dw)
@@ -429,6 +442,13 @@ class Manager:
         p_server = Thread(target=mserver.create_msg_server) # keep updating buffer data
         p_server.start()
 
+    def is_first_round(self, counters):
+        flag = True
+        for coun in list(counters.values()):
+            if coun != 0:
+                flag = False
+        return flag
+
     # node come and leave
     def events_launcher(self):
         print("=== event launcher called, process entrance ===")
@@ -474,7 +494,7 @@ class Manager:
                     counters[node] = counters[node] + 1
             
             # when node counter == 0 that is the start, just skip the start phase
-            if coming_nodes and list(counters.values())[0] != 0: 
+            if coming_nodes and self.is_first_round(counters) == False:
                 self.scheduler_nodes_change(JobNodeStatus.NODEIN, coming_nodes)
 
             if leaving_nodes:
