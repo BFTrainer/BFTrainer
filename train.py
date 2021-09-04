@@ -16,9 +16,9 @@ parser = argparse.ArgumentParser(description='PyTorch Synthetic Benchmark',
 parser.add_argument('--fp16-allreduce', action='store_true', default=False,
                     help='use fp16 compression during allreduce')
 
-parser.add_argument('--model', type=str, default='resnet50',
+parser.add_argument('--model', type=str, default='DenseNet',
                     help='model to benchmark')
-parser.add_argument('--batch-size', type=int, default=32,
+parser.add_argument('--batch-size', type=int, default=256,
                     help='input batch size')
 
 parser.add_argument('--num-warmup-batches', type=int, default=1,
@@ -110,15 +110,15 @@ log('Number of %ss: %d' % (device, hvd.size()))
 @hvd.elastic.run
 def run_benchmark(state):
    # Warm-up
-    if not state.warm:
-        log('Running warmup...')
-        timeit.timeit(lambda: benchmark_step(state), number=args.num_warmup_batches)
-        state.warm = True
-        state.commit()
+#     if not state.warm:
+#         log('Running warmup...')
+#         timeit.timeit(lambda: benchmark_step(state), number=args.num_warmup_batches)
+#         state.warm = True
+#         state.commit()
 
     # Benchmark
-    if state.iter == 0:
-        log('Running benchmark...')
+#     if state.iter == 0:
+#         log('Running benchmark...')
 
     if hvd.rank() == 0:
         print("create udp client")
