@@ -9,11 +9,13 @@ def interp1d4s(Ns, Os, Nx):
 
 def re_allocate(cmap, jmin, jmax, Ns, Os, Tfwd, res_up, res_dw, time_limit): # tfwd 10 time_limit - 30 seconds
     start_time = str(time.time())
-#     np.save(start_time + "before", cmap)
+    joblist = cmap.index
+    nodelist= cmap.columns
     with open("%s-b4.log" % start_time, 'w') as fp:
         fp.write(str(cmap) + '\n')
         fp.write(f"jmin={jmin}, jmax={jmax}, Ns={Ns}, Os={Os}, Tfwd={Tfwd}, res_up={res_up}, res_dw={res_dw}, time_limit={time_limit}\n")
-
+    cmap = cmap.values
+    
     nJ, nN = cmap.shape
     J = range(nJ)
     N = range(nN)
@@ -117,14 +119,21 @@ def re_allocate(cmap, jmin, jmax, Ns, Os, Tfwd, res_up, res_dw, time_limit): # t
     else:
         rate, cost = [], []
 
-#     np.save(start_time + "after", sol_map)
+    sol_map_pd = pd.DataFrame(sol_map, index=joblist, columns=nodelist)
     with open("%s-after.log" % start_time, 'w') as fp:
-        fp.write(str(sol_map) + '\n')
+        fp.write(str(sol_map_pd) + '\n')
         fp.write(f"opt_mdl.Status={opt_mdl.Status}, rate={rate}, cost={cost}")
         
     return opt_mdl.Status, sol_map, np.array(rate), np.array(cost)
 
 def re_allocate_ndf(cmap, jmin, jmax, Ns, Os, res_up, res_dw):
+    start_time = str(time.time())
+    joblist = cmap.index
+    nodelist= cmap.columns
+    with open("%s-b4.log" % start_time, 'w') as fp:
+        fp.write(str(cmap) + '\n')
+        fp.write(f"jmin={jmin}, jmax={jmax}, Ns={Ns}, Os={Os}, Tfwd={-1}, res_up={res_up}, res_dw={res_dw}, time_limit={-1}\n")
+    cmap = cmap.values
     
     nJ, nN = cmap.shape
     J = range(nJ)
@@ -175,4 +184,9 @@ def re_allocate_ndf(cmap, jmin, jmax, Ns, Os, res_up, res_dw):
     cost = np.array(cost)
     cost[_nJ == _cnJ] = 0
 
+    sol_map_pd = pd.DataFrame(c_map, index=joblist, columns=nodelist)
+    with open("%s-after.log" % start_time, 'w') as fp:
+        fp.write(str(sol_map_pd) + '\n')
+        fp.write(f"opt_mdl.Status={grb.GRB.OPTIMAL}, rate={job_rate}, cost={cost}")
+    
     return grb.GRB.OPTIMAL, c_map, job_rate, cost
