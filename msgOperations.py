@@ -24,7 +24,8 @@ class MSGOperations:
                 data, addr = s.recvfrom(1024)
                 address_id = 'Address:%s ' % addr[0]
                 msg = address_id + str(data, encoding = "utf-8")
-                
+                # print(msg)
+
                 # keep only around 500 items in the buffer
                 if self.buffer.qsize() <= 500:
                     self.buffer.put(msg)
@@ -40,6 +41,7 @@ class MSGOperations:
             print("Create Server failed")
             print(ex)
             s.close()
+
     # Client
     def create_msg_client(self, address, port):
         """Create udp client

@@ -17,6 +17,7 @@ def frag_sampling(n):
     return ret
 
 def synthetic_trace(nodes, nf):
+    np.random.seed(2021)
     fragments = frag_sampling(nf)
     avg_frag = np.mean(fragments)
     
@@ -24,16 +25,16 @@ def synthetic_trace(nodes, nf):
     for i in range(nf):
         _nd = np.random.randint(0, len(nodes)) # node id
         _oc = np.random.poisson(10*avg_frag)   # occupied time
-        _oc = 120
+        _oc = 120 # TODO: change back to 120 after debugging
         if len(trace_cont[nodes[_nd]]) == 0:
             pfe = 0
         else:
             pfe = trace_cont[nodes[_nd]][-1][-1] # end of last fragment
-        trace_cont[nodes[_nd]].append((pfe + _oc, pfe + _oc + fragments[i]))      # frag start and end
+        trace_cont[nodes[_nd]].append((pfe + _oc, pfe + _oc + fragments[i])) # frag start and end
     return trace_cont
 
 def create_events_base_on_trace(nodes, nf):
-    trace_cont = synthetic_trace(nodes, nf=100)
+    trace_cont = synthetic_trace(nodes, nf=20000)
 
     # for record the nodes status
     counters = {}

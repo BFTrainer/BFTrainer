@@ -1,6 +1,7 @@
 from itertools import groupby
 from queue import Queue
 import time
+from numpy.core.fromnumeric import mean
 
 import pandas as pd
 from enum import Enum
@@ -16,7 +17,7 @@ import sys_admin
 from threading import Thread
 import trace_generator
 
-MAXIMUM_PARALLEL = 5 # 
+MAXIMUM_PARALLEL = 2 # 
 
 MONITOR_GAP = 10
 NUM_OF_GPUs_PER_NODE = 8 #
@@ -310,7 +311,7 @@ class Manager:
         for msg in msg_list:
             msg_item = utils.parser_udp_message(msg)
             msg_items.append(msg_item)
-
+ 
         # group by address
         msg_items.sort(key=lambda x: x.address)
         group_items = groupby(msg_items, lambda x: x.address)
@@ -327,9 +328,10 @@ class Manager:
         # get N and O
         for jobname in group_dict:
             job_items = group_dict[jobname]
+            job_items.sort(key=lambda x: x.id) # sorted by id
             job_items.sort(key=lambda x: x.rank_size)
             group_job_items = groupby(job_items, lambda x: x.rank_size)
-            
+
             print(group_job_items)
 
             N = []
@@ -338,8 +340,20 @@ class Manager:
                 node_num = int(key)/NUM_OF_GPUs_PER_NODE
                 N.append(int(node_num))
                 group_list = list(group)
-                avg = sum([float(x.credit) for x in group_list])/len(group_list)
-                O.append(avg)
+                
+                thrputs = []
+                for i in range(0, len(group_list) - 1):
+                    msg_time_gap = float(group_list[i + 1].time) - float(group_list[i].time)
+                    print("msg time gap: ", msg_time_gap)
+                    thrput = float(group_list[i].credit) / msg_time_gap
+                    thrputs.append(thrput)
+                avg_thrput = thrputs[-1] # use the last thrput as the current thrput
+
+                print("*******************************")
+                print("avg_thrput", avg_thrput)
+                print("*******************************")
+
+                O.append(avg_thrput)
 
             # get res_up and res_down
             job_items.sort(key=lambda x: x.id)
@@ -517,8 +531,8 @@ def main():
     p_events.start()
     
     # 3. process monitor job pid
-    p_monitor = Thread(target=m.monitor_hvd_processes)
-    p_monitor.start()
+    # p_monitor = Thread(target=m.monitor_hvd_processes)
+    # p_monitor.start()
     
     '''
     # Debug segments
