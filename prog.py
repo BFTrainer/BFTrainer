@@ -9,7 +9,10 @@ def interp1d4s(Ns, Os, Nx):
 
 def re_allocate(cmap, jmin, jmax, Ns, Os, Tfwd, res_up, res_dw, time_limit): # tfwd 10 time_limit - 30 seconds
     start_time = str(time.time())
-    np.save(start_time + "before", cmap)
+#     np.save(start_time + "before", cmap)
+    with open("start_time-b4.log", 'w') as fp:
+        fp.write(str(cmap) + '\n')
+        fp.write(f"jmin={jmin}, jmax={jmax}, Ns={Ns}, Os={Os}, Tfwd={Tfwd}, res_up={res_up}, res_dw={res_dw}, time_limit={time_limit}\n")
 
     nJ, nN = cmap.shape
     J = range(nJ)
@@ -114,7 +117,11 @@ def re_allocate(cmap, jmin, jmax, Ns, Os, Tfwd, res_up, res_dw, time_limit): # t
     else:
         rate, cost = [], []
 
-    np.save(start_time + "after", sol_map)
+#     np.save(start_time + "after", sol_map)
+    with open("start_time-after.log", 'w') as fp:
+        fp.write(str(sol_map) + '\n')
+        fp.write(f"opt_mdl.Status={opt_mdl.Status}, rate={rate}, cost={cost}")
+        
     return opt_mdl.Status, sol_map, np.array(rate), np.array(cost)
 
 def re_allocate_ndf(cmap, jmin, jmax, Ns, Os, res_up, res_dw):
