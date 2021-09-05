@@ -16,9 +16,9 @@ parser = argparse.ArgumentParser(description='PyTorch Synthetic Benchmark',
 parser.add_argument('--fp16-allreduce', action='store_true', default=False,
                     help='use fp16 compression during allreduce')
 
-parser.add_argument('--model', type=str, default='DenseNet',
+parser.add_argument('--model', type=str, default='resnet50',
                     help='model to benchmark')
-parser.add_argument('--batch-size', type=int, default=256,
+parser.add_argument('--batch-size', type=int, default=32,
                     help='input batch size')
 
 parser.add_argument('--num-warmup-batches', type=int, default=1,
@@ -35,6 +35,8 @@ parser.add_argument('--no-cuda', action='store_true', default=False,
 
 parser.add_argument('--use-adasum', action='store_true', default=False,
                     help='use adasum algorithm to do reduction')
+
+parser.add_argument('--jobname', type = str, help='name of the job')
 
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -110,19 +112,19 @@ log('Number of %ss: %d' % (device, hvd.size()))
 @hvd.elastic.run
 def run_benchmark(state):
    # Warm-up
-#     if not state.warm:
-#         log('Running warmup...')
-#         timeit.timeit(lambda: benchmark_step(state), number=args.num_warmup_batches)
-#         state.warm = True
-#         state.commit()
+    if not state.warm:
+        log('Running warmup...')
+        timeit.timeit(lambda: benchmark_step(state), number=args.num_warmup_batches)
+        state.warm = True
+        state.commit()
 
     # Benchmark
-#     if state.iter == 0:
-#         log('Running benchmark...')
+    if state.iter == 0:
+        log('Running benchmark...')
 
     if hvd.rank() == 0:
         print("create udp client")
-        mo = MessageOperator(address='172.23.2.201', port=9999)
+        mo = MessageOperator(address='172.23.2.192', port=9999)
 
     for x in range(state.iter, args.num_iters):
         # time = timeit.timeit(lambda: benchmark_step(state), number=args.num_batches_per_iter)
@@ -131,7 +133,7 @@ def run_benchmark(state):
         # img_sec = args.batch_size * hvd.size() / tick
         # log('Iter #%d: %.1f img/sec per %s' % (x, img_sec, device))
         if hvd.rank() == 0:
-            mo.report(credit=args.batch_size * hvd.size(), rank_size = hvd.size())
+            mo.report(credit=args.batch_size * hvd.size(), rank_size = hvd.size(), jobname=args.jobname)
         
         state.img_secs.append(0)
         state.iter = x

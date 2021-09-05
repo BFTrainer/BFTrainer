@@ -32,11 +32,18 @@ def get_lists_overlap(nums1, nums2):
 
 def parser_job_string_2_job_item(jobString):
     """
+    
     jobstring example for reference
     name:job1 min:1 max:6 N:1,2,3 O:1,1.9,2.8 res_up:3 res_down:1 path:train.py
+
+    jobstring example for reference
+    name:job1 min:1 max:6 N:1,2,3 O:1,1.9,2.8 res_up:3 res_down:1 path:train.py --jobaname 1
+
     """
 
     # Get job dict from string
+    jobString = jobString.split(" --")[0] # delete when do not need to report jobname
+
     jobDict = {}
     items = jobString.split(" ")
     for item in items:

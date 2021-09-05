@@ -531,8 +531,8 @@ def main():
     p_events.start()
     
     # 3. process monitor job pid
-    # p_monitor = Thread(target=m.monitor_hvd_processes)
-    # p_monitor.start()
+    p_monitor = Thread(target=m.monitor_hvd_processes)
+    p_monitor.start()
     
     '''
     # Debug segments

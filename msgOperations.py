@@ -24,7 +24,7 @@ class MSGOperations:
                 data, addr = s.recvfrom(1024)
                 address_id = 'Address:%s ' % addr[0]
                 msg = address_id + str(data, encoding = "utf-8")
-                # print(msg)
+                print(msg)
 
                 # keep only around 500 items in the buffer
                 if self.buffer.qsize() <= 500:

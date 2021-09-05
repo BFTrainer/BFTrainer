@@ -94,8 +94,9 @@ def create_discovery_file(jobname, nodes):
     return discovery_path
 
 def generate_command(discover_file_path, jobname, job_info_dict):
+    print("jobname type", type(jobname))
     scriptPath = job_info_dict[jobname].path
-    command = "/lus/theta-fs0/software/thetagpu/conda/2021-06-26/mconda3/bin/horovodrun -np 1 --host-discovery-script " + discover_file_path + " python " + scriptPath
+    command = "/lus/theta-fs0/software/thetagpu/conda/2021-06-26/mconda3/bin/horovodrun -np 1 --host-discovery-script " + discover_file_path + " python " + scriptPath + " --jobname " + jobname
     return command
 
 def del_job(jobname, job_info_dict):

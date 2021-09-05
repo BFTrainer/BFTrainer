@@ -8,9 +8,9 @@ class MessageOperator:
         self.socket = Manager().create_msg_client(address, port)
         self.sequence_id = 0
 
-    def report(self, credit, rank_size):
+    def report(self, credit, rank_size, jobname):
         t = time.time()
-        report_msg = 'id:%d time:%f rank_size:%d credit:%s' % (self.sequence_id, t, rank_size, credit)
+        report_msg = 'id:%d time:%f rank_size:%d credit:%s jobname:%s' % (self.sequence_id, t, rank_size, credit, jobname)
         self.sequence_id += 1
         try:
             self.socket.sendto(str.encode(report_msg), (self.address, self.port))
