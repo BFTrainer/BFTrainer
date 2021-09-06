@@ -118,6 +118,7 @@ class Manager:
     def scheduler_job_change(self, GUIDs):
         
         # 1. Detect job leave
+        # drop the job from map and job_dict
         for GUID in GUIDs:
             print("GUID: ", GUID)
             print("GUID Type: ", type(GUID))
@@ -139,6 +140,7 @@ class Manager:
             job_string_list.append(jobstring)
             jobdetail = utils.parser_job_string_2_job_item(jobstring)
             newrow = pd.DataFrame([np.zeros(len(self.current_map.columns), dtype=int)], index=[jobdetail.GUID] ,columns=self.current_map.columns)
+            
             # add new job to map
             self.current_map = self.current_map.append(newrow)
             # add new job to dict
@@ -147,7 +149,6 @@ class Manager:
         print("after fetching new job get the new current map")
         print(self.current_map)
  
-         # update buffer info to job_info_dict
         self.update_job_data_on_events(self.buffer)
         
         # get parameters with latest `job_info_dict`
@@ -226,10 +227,10 @@ class Manager:
             for jobname in self.job_info_dict.keys():
 
                 pid = self.job_info_dict[jobname].pid
-                print("dict stored hvd pid: %s - %s" % (jobname, pid))
+                print("dict stored hvd job - pid: %s - %s" % (jobname, pid))
 
                 if not psutil.pid_exists(pid):
-                    print("Hey! we found hvdrun process %s not existed anymore, so we start fetch new jobs", pid)
+                    print("Hey! we found hvdrun process %s - %s not existed anymore, so we start fetch new jobs" % (jobname, pid))
                     jobnames.append(jobname)
 
             if jobnames:
@@ -312,7 +313,7 @@ class Manager:
             msg_item = utils.parser_udp_message(msg)
             msg_items.append(msg_item)
  
-        # group by address
+        # group by address (hostname)
         msg_items.sort(key=lambda x: x.address)
         group_items = groupby(msg_items, lambda x: x.address)
         
@@ -325,9 +326,9 @@ class Manager:
             print('hostname', hostname)
             jobname = utils.get_jobname_by_hostname(hostname, self.current_map)
             
-            print("jobname we get:", jobname)
+            print("jobname we get", jobname)
             print(self.current_map)
-
+            
             if jobname == "":
                 print("hello, job name is empty string")
                 continue
@@ -335,7 +336,7 @@ class Manager:
             group_dict[jobname] = list(group)
 
         # get N and O
-        for jobname in group_dict:
+        for jobname in group_dict: # TODO: bug here sometimes group_dict is empty
             job_items = group_dict[jobname]
             job_items.sort(key=lambda x: x.id) # sorted by id
             job_items.sort(key=lambda x: x.rank_size)
