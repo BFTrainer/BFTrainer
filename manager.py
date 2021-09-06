@@ -117,9 +117,6 @@ class Manager:
 
     def scheduler_job_change(self, GUIDs):
         
-        # update buffer info to job_info_dict
-        self.update_job_data_on_events(self.buffer)
-        
         # 1. Detect job leave
         for GUID in GUIDs:
             print("GUID: ", GUID)
@@ -149,6 +146,9 @@ class Manager:
 
         print("after fetching new job get the new current map")
         print(self.current_map)
+ 
+         # update buffer info to job_info_dict
+        self.update_job_data_on_events(self.buffer)
         
         # get parameters with latest `job_info_dict`
         mins, maxs, Ns, Os, res_ups, res_dws = utils.get_optimizer_parameters_by_job_dict(self.job_info_dict)
@@ -318,9 +318,18 @@ class Manager:
         
         group_dict = {} # key:job val:group of iterations info for this job
         for key, group in group_items:
+            print('key', key)
+            # print('group', group)
+
             hostname = utils.get_host_name_by_address(key)
+            print('hostname', hostname)
             jobname = utils.get_jobname_by_hostname(hostname, self.current_map)
+            
+            print("jobname we get:", jobname)
+            print(self.current_map)
+
             if jobname == "":
+                print("hello, job name is empty string")
                 continue
             print("update data event get name by address -- hostname: %s job name: %s" % (hostname, jobname))
             group_dict[jobname] = list(group)
@@ -344,7 +353,6 @@ class Manager:
                 thrputs = []
                 for i in range(0, len(group_list) - 1):
                     msg_time_gap = float(group_list[i + 1].time) - float(group_list[i].time)
-                    print("msg time gap: ", msg_time_gap)
                     thrput = float(group_list[i].credit) / msg_time_gap
                     thrputs.append(thrput)
                 avg_thrput = thrputs[-1] # use the last thrput as the current thrput
