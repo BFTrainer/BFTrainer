@@ -103,7 +103,7 @@ class Manager:
         # Feed the optimizer and get the optimized newmap
         mins, maxs, Ns, Os, res_ups, res_dws = utils.get_optimizer_parameters_by_job_dict(self.job_info_dict)
 
-        tmpGRB, new_data, tmpRate, tmpCost = re_allocate(cmap=initialMap.values, jmin=mins, jmax=maxs,
+        tmpGRB, new_data, tmpRate, tmpCost = re_allocate(cmap=initialMap, jmin=mins, jmax=maxs,
                                                             Ns=Ns,Os=Os, Tfwd=10, res_up=res_ups, res_dw = res_dws, 
                                                             time_limit=10)
         print(new_data)
@@ -155,7 +155,7 @@ class Manager:
         # get parameters with latest `job_info_dict`
         mins, maxs, Ns, Os, res_ups, res_dws = utils.get_optimizer_parameters_by_job_dict(self.job_info_dict)
 
-        tmpGRB, new_data, tmpRate, tmpCost = re_allocate(cmap=self.current_map.values, jmin=mins, jmax=maxs,
+        tmpGRB, new_data, tmpRate, tmpCost = re_allocate(cmap=self.current_map, jmin=mins, jmax=maxs,
                                 Ns=Ns,Os=Os, Tfwd=10, res_up=res_ups, res_dw = res_dws, time_limit=10)
 
         new_map = pd.DataFrame(data=new_data, index=self.current_map.index, columns=self.current_map.columns)
@@ -189,7 +189,7 @@ class Manager:
             print("node in")
             for node in nodes:
                self.current_map.insert(self.current_map.shape[1], node, 0) # dataframe add one new column
-            tmpGRB, new_data, tmpRate, tmpCost = re_allocate(cmap=self.current_map.values, jmin=mins, jmax=maxs,
+            tmpGRB, new_data, tmpRate, tmpCost = re_allocate(cmap=self.current_map, jmin=mins, jmax=maxs,
                                                                 Ns=Ns,Os=Os, Tfwd=10, res_up=res_ups, res_dw = res_dws, time_limit=10)
             new_map = pd.DataFrame(data=new_data, index=self.current_map.index, columns=self.current_map.columns)
         else:
@@ -199,7 +199,7 @@ class Manager:
             for node in nodes:
                 tmp_map = self.current_map.drop(labels=node, axis=1) # dataframe delete one column
 
-            tmpGRB, new_data, tmpRate, tmpCost = re_allocate(cmap=tmp_map.values, jmin=mins, jmax=maxs,
+            tmpGRB, new_data, tmpRate, tmpCost = re_allocate(cmap=tmp_map, jmin=mins, jmax=maxs,
                                                 Ns=Ns,Os=Os, Tfwd=10, res_up=res_ups, res_dw = res_dws, time_limit=10)
             new_map = pd.DataFrame(data=new_data, index=tmp_map.index, columns=tmp_map.columns)
             print("new map", new_map)

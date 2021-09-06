@@ -2,6 +2,8 @@ import time
 import numpy as np
 import gurobipy as grb
 from scipy import interpolate
+import pandas as pd
+
 
 def interp1d4s(Ns, Os, Nx):
     f = interpolate.interp1d(Ns, Os, bounds_error=False, fill_value="extrapolate")
