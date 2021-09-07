@@ -83,8 +83,8 @@ def add_job(jobname, nodes, job_info_dict):
 def create_discovery_file(jobname, nodes):
     discovery_path = os.path.join(WORKING_DIR,"discover_host_" + jobname + ".sh")
     with open(discovery_path, 'w') as w:
-        w.write("#!/bin/bash\n")
-        # w.write("echo thetagpu10:0\n")  # dummy computing node (the purpose for this line is for launch 1 node task at initial)
+        w.write("#!/bin/bash\n\n")
+        w.write("echo localhost:0\n")  # dummy computing node (the purpose for this line is for launch 1 node task at initial)
         for node in nodes:
             w.write("echo " + node + ":" + str(NUM_OF_GPUs_PER_NODE) + "\n")
 
