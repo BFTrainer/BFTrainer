@@ -17,7 +17,7 @@ import sys_admin
 from threading import Thread
 import trace_generator
 
-MAXIMUM_PARALLEL = 2 # 
+MAXIMUM_PARALLEL = 5 # 
 
 MONITOR_GAP = 10
 NUM_OF_GPUs_PER_NODE = 8 #
@@ -78,14 +78,11 @@ class Manager:
 
     # life cycle functions
     def _managerStart(self):
-        print("manager start")
         sys_nodes=sys_admin.get_cluster_nodes()
         if len(sys_nodes) == 0 or (sys_nodes is None):
-            print("No nodes avaliable")
             return
         
         if self.get_job_queue_len() == 0:
-            print("No valid jobs")
             return
         
         # fetch job from DB
@@ -112,11 +109,9 @@ class Manager:
 
         managerOperations.adjust_nodes_by_map(new_map=new_map, old_map=initialMap, job_info_dict = self.job_info_dict)
         self.current_map = new_map
-        print("manager start end")
-        print("=========================")
 
     def scheduler_job_change(self, GUIDs):
-        
+                
         # 1. Detect job leave
         # drop the job from map and job_dict
         for GUID in GUIDs:
@@ -128,12 +123,19 @@ class Manager:
             self.job_info_dict.pop(GUID)
 
         # 2. fetch jobs to max parallel(batch manner)
+        # TODO: fetch job to max parallel
+
         print("job leaving after and fetch before job_info_dict: ", self.job_info_dict)
         print("fetching job to max parallel")
 
         job_string_list = []
         lacking_len = self.max_parallel - len(self.job_info_dict)
+        print(self.max_parallel)
+        print("lacking_len: ", lacking_len)
+
         job_num = min(lacking_len, self.get_job_queue_len())
+        print("job number:", job_num)
+
         for i in range(job_num):
             jobstring = self._get_a_job_from_DB()
             print("fetch new job: ", jobstring)
@@ -148,7 +150,8 @@ class Manager:
 
         print("after fetching new job get the new current map")
         print(self.current_map)
- 
+
+        # update buffer info to job_info_dict
         self.update_job_data_on_events(self.buffer)
         
         # get parameters with latest `job_info_dict`
@@ -185,16 +188,16 @@ class Manager:
         print(Ns, Os, res_ups, res_dws)
 
         if flag == JobNodeStatus.NODEIN:
-            print("node in")
+            print("node in :", nodes)
+            print("old map", self.current_map)
             for node in nodes:
                self.current_map.insert(self.current_map.shape[1], node, 0) # dataframe add one new column
             tmpGRB, new_data, tmpRate, tmpCost = re_allocate(cmap=self.current_map, jmin=mins, jmax=maxs,
                                                                 Ns=Ns,Os=Os, Tfwd=10, res_up=res_ups, res_dw = res_dws, time_limit=10)
             new_map = pd.DataFrame(data=new_data, index=self.current_map.index, columns=self.current_map.columns)
         else:
-            print("node leave")
+            print("node leave ", nodes)
             print("old map", self.current_map)
-            print(nodes)
             for node in nodes:
                 tmp_map = self.current_map.drop(labels=node, axis=1) # dataframe delete one column
 
@@ -221,9 +224,12 @@ class Manager:
     
     def monitor_hvd_processes(self):
         while True:
-            print("============= monitor hvd process report ===============")
+            now = time.time()
+            print("============= %f : monitor hvd process report * Head ===============" % now)
+            
             time.sleep(self.monitor_gap) # check every 15s
             jobnames = []
+            print(self.current_map)
             for jobname in self.job_info_dict.keys():
 
                 pid = self.job_info_dict[jobname].pid
@@ -237,7 +243,7 @@ class Manager:
                 print("jobnames", jobnames)
                 self.scheduler_job_change(GUIDs=jobnames)
 
-            print("============= monitor hvd process report ===============")
+            print("============= %f : monitor hvd process report * foot ===============" % now)
     
     def merge_ordered_NO_2_itemNO(self, job_N, job_O, N, O):
         # Switch job_N and job_O to a dict
@@ -319,18 +325,14 @@ class Manager:
         
         group_dict = {} # key:job val:group of iterations info for this job
         for key, group in group_items:
-            print('key', key)
-            # print('group', group)
-
+            
             hostname = utils.get_host_name_by_address(key)
-            print('hostname', hostname)
             jobname = utils.get_jobname_by_hostname(hostname, self.current_map)
             
             print("jobname we get", jobname)
             print(self.current_map)
             
             if jobname == "":
-                print("hello, job name is empty string")
                 continue
             print("update data event get name by address -- hostname: %s job name: %s" % (hostname, jobname))
             group_dict[jobname] = list(group)
@@ -358,34 +360,45 @@ class Manager:
                     thrputs.append(thrput)
                 avg_thrput = thrputs[-1] # use the last thrput as the current thrput
 
-                print("*******************************")
-                print("avg_thrput", avg_thrput)
-                print("*******************************")
-
                 O.append(avg_thrput)
 
             # get res_up and res_down
             job_items.sort(key=lambda x: x.id)
+            print("job items", job_items)
+            print("len:", len(job_items))
             res_up = None
             res_dw = None
             if len(job_items) > 2:
-                print("update res up and down")
+                print("update res_up and res_dw")
+
                 for i in range(len(job_items)-1,-1,-1): # reverse order find rank difference
+                    '''
+                    print("i rank_size:", job_items[i].rank_size)
+                    print("i- 1 rank_size:", job_items[i-1].rank_size)
+                    print("i - 2 rank_size:", job_items[i-2].rank_size)
+                    print(type(job_items[i-2].rank_size))
+                    print("idx value: ", i)
+                    '''
+                    
                     if job_items[i].rank_size > job_items[i-1].rank_size and job_items[i-1].rank_size == job_items[i-2].rank_size:
                         print("================ get the res_up cost ===================")
                         res_up = (float(job_items[i].time) - float(job_items[i-1].time)) - (float(job_items[i-1].time) - float(job_items[i-2].time))
-                    elif job_items[i].rank_size < job_items[i-1].rank_size:
+                        print("==resup==", res_up)
+
+                    elif job_items[i].rank_size < job_items[i-1].rank_size and job_items[i-1].rank_size == job_items[i-2].rank_size:
                         print("================ get the res_down cost =================")
                         print(type(job_items[i].time))
                         print(job_items[i].time)
                         res_dw = (float(job_items[i].time) - float(job_items[i-1].time)) - (float(job_items[i-1].time) - float(job_items[i-2].time))
-            
+                        print("==resdw==", res_dw)
+
             print("res_up", res_up)
             print("res_dw", res_dw)
         
         # Update collect info to JobInfoDict
         self.dynamic_update_job_data(jobname=jobname, N=N, O=O, res_up=res_up, res_down=res_dw)
-
+    
+    '''
     def update_job_data_on_freq(self, mserver):
         print("start dynamic update Ns/Os and resup and down data")
         while True:
@@ -455,6 +468,7 @@ class Manager:
             
             # Update collect info to JobInfoDict
             self.dynamic_update_job_data(jobname=jobname, N=N, O=O, res_up=res_up, res_down=res_dw)
+        '''
 
     def run_msg_server(self):
         # run server daemon
@@ -480,7 +494,7 @@ class Manager:
 
         # create events source
         cluster_nodes = sys_admin.get_cluster_nodes()
-        trace = trace_generator.synthetic_trace(nodes=cluster_nodes, nf=100)
+        trace = trace_generator.synthetic_trace(nodes=cluster_nodes, nf=20000)
         print(trace)
 
         # record the status of nodes in arrary for controlling events      

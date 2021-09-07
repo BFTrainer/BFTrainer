@@ -34,7 +34,7 @@ def synthetic_trace(nodes, nf):
     return trace_cont
 
 def create_events_base_on_trace(nodes, nf):
-    trace_cont = synthetic_trace(nodes, nf=20000)
+    trace_cont = synthetic_trace(nodes, nf=100000)
 
     # for record the nodes status
     counters = {}

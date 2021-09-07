@@ -11,20 +11,20 @@ class MSGOperations:
     def __init__(self) -> None:
         self.buffer = Queue()
 
-        # create file
-        self.log = open("msg.log", "w")
-
     # Sever - manager side
     def create_msg_server(self):
         try:
+
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.bind((ADDRESS, PORT))
+
             print("create udp server success")
+            w = open("msg.log", "w")
             while True:
                 data, addr = s.recvfrom(1024)
                 address_id = 'Address:%s ' % addr[0]
                 msg = address_id + str(data, encoding = "utf-8")
-                # print(msg)
+                print(msg)
 
                 # keep only around 500 items in the buffer
                 if self.buffer.qsize() <= 500:
@@ -33,8 +33,8 @@ class MSGOperations:
                     self.buffer.get() # remove as FIFO
                     self.buffer.put(msg) # put a new one
 
-                self.log.write(msg + '\n')
-                self.log.flush()
+                w.write(msg + '\n')
+                w.flush()
                 # print(msg)
                 # print("queue size: ", self.buffer.qsize())
         except Exception as ex:
