@@ -14,7 +14,7 @@ def re_allocate(cmap, jmin, jmax, Ns, Os, Tfwd, res_up, res_dw, time_limit): # t
     joblist = cmap.index
     nodelist= cmap.columns
     with open("%s-b4.log" % start_time, 'w') as fp:
-        fp.write(str(cmap) + '\n')
+        fp.write(cmap.to_string() + '\n')
         fp.write(f"jmin={jmin}, jmax={jmax}, Ns={Ns}, Os={Os}, Tfwd={Tfwd}, res_up={res_up}, res_dw={res_dw}, time_limit={time_limit}\n")
     cmap = cmap.values
     
@@ -123,7 +123,7 @@ def re_allocate(cmap, jmin, jmax, Ns, Os, Tfwd, res_up, res_dw, time_limit): # t
 
     sol_map_pd = pd.DataFrame(sol_map, index=joblist, columns=nodelist)
     with open("%s-after.log" % start_time, 'w') as fp:
-        fp.write(str(sol_map_pd) + '\n')
+        fp.write(sol_map_pd.to_string() + '\n')
         fp.write(f"opt_mdl.Status={opt_mdl.Status}, rate={rate}, cost={cost}")
         
     return opt_mdl.Status, sol_map, np.array(rate), np.array(cost)
@@ -133,7 +133,7 @@ def re_allocate_ndf(cmap, jmin, jmax, Ns, Os, res_up, res_dw):
     joblist = cmap.index
     nodelist= cmap.columns
     with open("%s-b4.log" % start_time, 'w') as fp:
-        fp.write(str(cmap) + '\n')
+        fp.write(cmap.to_string() + '\n')
         fp.write(f"jmin={jmin}, jmax={jmax}, Ns={Ns}, Os={Os}, Tfwd={-1}, res_up={res_up}, res_dw={res_dw}, time_limit={-1}\n")
     cmap = cmap.values
     
@@ -188,7 +188,7 @@ def re_allocate_ndf(cmap, jmin, jmax, Ns, Os, res_up, res_dw):
 
     sol_map_pd = pd.DataFrame(c_map, index=joblist, columns=nodelist)
     with open("%s-after.log" % start_time, 'w') as fp:
-        fp.write(str(sol_map_pd) + '\n')
+        fp.write(sol_map_pd.to_string() + '\n')
         fp.write(f"opt_mdl.Status={grb.GRB.OPTIMAL}, rate={job_rate}, cost={cost}")
     
     return grb.GRB.OPTIMAL, c_map, job_rate, cost
