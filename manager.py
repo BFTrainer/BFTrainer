@@ -2,6 +2,7 @@ from itertools import groupby
 from queue import Queue
 import time
 from numpy.core.fromnumeric import mean
+import sys
 
 import pandas as pd
 from enum import Enum
@@ -539,6 +540,8 @@ class Manager:
 
 def main():
 
+    sys.stdout = open('stdout.log' 'w')
+    
     # create manager
     m = Manager(max_parallel=MAXIMUM_PARALLEL, monitor_gap= 10)
     
