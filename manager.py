@@ -496,7 +496,10 @@ class Manager:
         # create events source
         cluster_nodes = sys_admin.get_cluster_nodes()
         trace = trace_generator.synthetic_trace(nodes=cluster_nodes, nf=20000)
-        print(trace)
+        
+        # write events trace to log
+        with open("events.log", 'w') as f:
+            f.write(str(trace))
 
         # record the status of nodes in arrary for controlling events      
         counters = {}
@@ -541,7 +544,7 @@ class Manager:
 def main():
 
     sys.stdout = open('stdout.log' 'w')
-    
+
     # create manager
     m = Manager(max_parallel=MAXIMUM_PARALLEL, monitor_gap= 10)
     
