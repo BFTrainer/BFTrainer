@@ -1,11 +1,27 @@
-from manager import Manager
-import time
+# from manager import Manager
+import time, socket
+
+def create_msg_client(address, port):
+    """Create udp client
+    Args:
+        address (str): msg address
+        port (int): msg port
+    Returns:
+        [socket]: [udp client socket]
+    """
+    try:
+        print("create udp")
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        return s
+    except Exception as ex:
+        print("Create client failed")
+        s.close()
 
 class MessageOperator:
     def __init__(self, address, port) -> None:
         self.address = address
         self.port = port
-        self.socket = Manager().create_msg_client(address, port)
+        self.socket = create_msg_client(address, port)
         self.sequence_id = 0
 
     def report(self, credit, rank_size, jobname):
