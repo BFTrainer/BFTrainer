@@ -126,7 +126,10 @@ def re_allocate(cmap, jmin, jmax, Ns, Os, Tfwd, res_up, res_dw, time_limit): # t
         fp.write(sol_map_pd.to_string() + '\n')
         fp.write(f"opt_mdl.Status={opt_mdl.Status}, rate={rate}, cost={cost}")
         
-    return opt_mdl.Status, sol_map, np.array(rate), np.array(cost)
+    if opt_mdl.Status == grb.GRB.OPTIMAL:
+        return opt_mdl.Status, sol_map, np.array(rate), np.array(cost)
+    else:
+        return opt_mdl.Status, cmap,    np.array(rate)*0, np.array(cost)*0
 
 def re_allocate_ndf(cmap, jmin, jmax, Ns, Os, res_up, res_dw):
     start_time = str(time.time())
