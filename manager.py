@@ -18,7 +18,7 @@ import sys_admin
 from threading import Thread
 import trace_generator
 
-MAXIMUM_PARALLEL = 5 # 
+MAXIMUM_PARALLEL = 2 # 
 
 MONITOR_GAP = 10
 NUM_OF_GPUs_PER_NODE = 8 #
@@ -543,7 +543,7 @@ class Manager:
 
 def main():
 
-    sys.stdout = open('stdout.log' 'w')
+    # sys.stdout = open('stdout.log', 'w')
 
     # create manager
     m = Manager(max_parallel=MAXIMUM_PARALLEL, monitor_gap= 10)
