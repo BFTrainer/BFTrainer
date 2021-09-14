@@ -1,7 +1,6 @@
 from itertools import groupby
 from queue import Queue
 import time
-from numpy.core.fromnumeric import mean
 import sys
 
 import pandas as pd
@@ -20,7 +19,7 @@ import trace_generator
 
 MAXIMUM_PARALLEL = 2 # 
 
-MONITOR_GAP = 10
+MONITOR_GAP = 20
 NUM_OF_GPUs_PER_NODE = 8 #
 
 class JobNodeStatus(Enum):
@@ -78,7 +77,7 @@ class Manager:
         managerOperations.create_msg_server()
 
     # life cycle functions
-    def _managerStart(self):
+    def manager_start(self):
         sys_nodes=sys_admin.get_cluster_nodes()
         if len(sys_nodes) == 0 or (sys_nodes is None):
             return
@@ -110,6 +109,10 @@ class Manager:
 
         managerOperations.adjust_nodes_by_map(new_map=new_map, old_map=initialMap, job_info_dict = self.job_info_dict)
         self.current_map = new_map
+        
+        print("=======================")
+        print("===manager start end===")
+        print("=======================")
 
     def scheduler_job_change(self, GUIDs):
                 
@@ -124,8 +127,6 @@ class Manager:
             self.job_info_dict.pop(GUID)
 
         # 2. fetch jobs to max parallel(batch manner)
-        # TODO: fetch job to max parallel
-
         print("job leaving after and fetch before job_info_dict: ", self.job_info_dict)
         print("fetching job to max parallel")
 
@@ -134,8 +135,11 @@ class Manager:
         print(self.max_parallel)
         print("lacking_len: ", lacking_len)
 
-        job_num = min(lacking_len, self.get_job_queue_len())
-        print("job number:", job_num)
+        left_jobs_in_db = self.get_job_queue_len()
+        print("There are %d jobs left in database" % left_jobs_in_db)
+
+        job_num = min(lacking_len, left_jobs_in_db)
+        print("fetched valid job number:", job_num)
 
         for i in range(job_num):
             jobstring = self._get_a_job_from_DB()
@@ -149,11 +153,12 @@ class Manager:
             # add new job to dict
             self.job_info_dict[jobdetail.GUID] = jobdetail
 
-        print("after fetching new job get the new current map")
+        print("After fetching jobs get the map for adjustment")
         print(self.current_map)
 
         # update buffer info to job_info_dict
-        self.update_job_data_on_events(self.buffer)
+        # 
+        self.update_job_data_on_events(self.buffer, event_type="job event")
         
         # get parameters with latest `job_info_dict`
         mins, maxs, Ns, Os, res_ups, res_dws = utils.get_optimizer_parameters_by_job_dict(self.job_info_dict)
@@ -167,6 +172,10 @@ class Manager:
 
         # update current_map
         self.current_map = new_map
+        
+        # print current map after allocation
+        print("After re-allocation jobs get the new map")
+        print(self.current_map)
 
     def scheduler_nodes_change(self, flag, nodes):
         print("node change called")
@@ -174,7 +183,7 @@ class Manager:
         # Event driven update data here
         # Use buffer data and get ns os and res_up and res_dw
         # 
-        self.update_job_data_on_events(self.buffer)
+        self.update_job_data_on_events(self.buffer, event_type= "node event")
 
         # validate nodes name before operations 
         if sys_admin.is_nodes_belong_to_avaliable_nodes(nodes) == False:
@@ -212,7 +221,7 @@ class Manager:
         # update current_map
         self.current_map = new_map
 
-    # for future use
+    # for future usage
     def _terminate_manager(self):
         # kill all horovodrun process in dictionary
         for job in self.job_info_dict:
@@ -228,16 +237,16 @@ class Manager:
             now = time.time()
             print("============= %f : monitor hvd process report * Head ===============" % now)
             
-            time.sleep(self.monitor_gap) # check every 15s
+            time.sleep(self.monitor_gap)
             jobnames = []
             print(self.current_map)
             for jobname in self.job_info_dict.keys():
-
                 pid = self.job_info_dict[jobname].pid
                 print("dict stored hvd job - pid: %s - %s" % (jobname, pid))
 
                 if not psutil.pid_exists(pid):
-                    print("Hey! we found hvdrun process %s - %s not existed anymore, so we start fetch new jobs" % (jobname, pid))
+
+                    print("Hey! we found hvdrun job: %s - process: %s not existed anymore, so we start fetch new jobs" % (jobname, pid))
                     jobnames.append(jobname)
 
             if jobnames:
@@ -272,14 +281,17 @@ class Manager:
 
         return Ns, Os
 
-    def dynamic_update_job_data(self, jobname, N=None, O=None, res_up = None, res_down = None):
+    def update_scaling_and_cost_data_2_jobInfoDict(self, jobname, N=None, O=None, res_up = None, res_down = None):
         """
         This function only for dynamic update job_info_dict job N O and resup and down information
         """
-        print("========Dynamic update job data called==========")
+
+        print("========update_scaling_and_cost_data_2_jobInfoDict called==========")
         print("N is: ", N)
         print("O is: ", O)
-
+        print("res_up is", res_up)
+        print("res_dw is", res_down)
+        
         if self.job_info_dict == None or len(self.job_info_dict) == 0:
             return
 
@@ -306,14 +318,19 @@ class Manager:
         if res_down != None:
             job_item.res_down = res_down
 
-    def update_job_data_on_events(self, mserver):
-        print("start dynamic update Ns/Os and resup and down data on events")
+    def update_job_data_on_events(self, mserver, event_type):
+        ''' job change or node change trigger updating data for re-allocation'''
+
+        # TODO: logic here could be improve. 
+
+        print('%s trigger updating data for re-allocation' % event_type)
 
         msg_items = []
         msg_list = list(mserver.queue)
-        print("========msg list length %d ==========" % len(msg_list))
+        print("========msg length in buffer: %d ==========" % len(msg_list))
 
         if len(msg_list) == 0:
+            print("msg len 0 skip update process")
             return
 
         for msg in msg_list:
@@ -328,6 +345,8 @@ class Manager:
         for key, group in group_items:
             
             hostname = utils.get_host_name_by_address(key)
+            print("find jobname by host name, the map is:")
+            
             jobname = utils.get_jobname_by_hostname(hostname, self.current_map)
             
             print("jobname we get", jobname)
@@ -337,15 +356,18 @@ class Manager:
                 continue
             print("update data event get name by address -- hostname: %s job name: %s" % (hostname, jobname))
             group_dict[jobname] = list(group)
+        
+        # Cannot find job related
+        if len(group_dict) == 0:
+            print("Jobs in current_map has no any training msg in buffer, probably means all jobs are new fetched(not started yet)," \
+            " do not need to use historial information to do the update, so return the update function here")
+            return
 
-        # get N and O
-        for jobname in group_dict: # TODO: bug here sometimes group_dict is empty
+        for jobname in group_dict:
             job_items = group_dict[jobname]
             job_items.sort(key=lambda x: x.id) # sorted by id
             job_items.sort(key=lambda x: x.rank_size)
             group_job_items = groupby(job_items, lambda x: x.rank_size)
-
-            print(group_job_items)
 
             N = []
             O = []
@@ -365,8 +387,6 @@ class Manager:
 
             # get res_up and res_down
             job_items.sort(key=lambda x: x.id)
-            print("job items", job_items)
-            print("len:", len(job_items))
             res_up = None
             res_dw = None
             if len(job_items) > 2:
@@ -397,7 +417,7 @@ class Manager:
             print("res_dw", res_dw)
         
         # Update collect info to JobInfoDict
-        self.dynamic_update_job_data(jobname=jobname, N=N, O=O, res_up=res_up, res_down=res_dw)
+        self.update_scaling_and_cost_data_2_jobInfoDict(jobname=jobname, N=N, O=O, res_up=res_up, res_down=res_dw)
     
     '''
     def update_job_data_on_freq(self, mserver):
@@ -489,9 +509,7 @@ class Manager:
 
     # node come and leave
     def events_launcher(self):
-        print("=== event launcher called, process entrance ===")
-
-        self._managerStart()
+        self.manager_start()
 
         # create events source
         cluster_nodes = sys_admin.get_cluster_nodes()
@@ -544,7 +562,7 @@ class Manager:
 def main():
 
     # create manager
-    m = Manager(max_parallel=MAXIMUM_PARALLEL, monitor_gap= 10)
+    m = Manager()
     
     # 1. create server ready to recv data
     m.run_msg_server()

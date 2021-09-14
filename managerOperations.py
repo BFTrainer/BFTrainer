@@ -50,6 +50,7 @@ def create_msg_server(): # pass dynamic update data function into
 
 def add_job(jobname, nodes, job_info_dict):
     print("Add job was called")
+    print("jobname %s on nodes %s" %(jobname, nodes))
     # if the job not being assigned node
     # just skip the process
     if nodes == None or len(nodes) == 0:
@@ -66,16 +67,15 @@ def add_job(jobname, nodes, job_info_dict):
 
     # 2. Launch new job and get process id
     with open("stdout.txt","w") as out, open("stderr.txt","w") as err:
-        print("before start new job")
         print("command", command)
         p = Popen(command, shell=True, env=myenv, stdout=out, stderr=err)
-        print("after start new job")
 
         hvdrunParentPid = p.pid
         fp = psutil.Process(hvdrunParentPid)
 
         hvdpid = fp.children()[0].pid
-        print("hvdpid is:", hvdpid)
+        print("new job launch success and the hvdpid is:", hvdpid)
+
         # 3. update process id to `jobInfoDict`
         jobItem = job_info_dict[jobname]
         jobItem.pid = hvdpid
@@ -127,7 +127,8 @@ def del_discover_files(jobname):
 
 # Node changes
 def add_nodes_for_job(jobname, nodes):
-    print("add nodes called")    
+    print("add nodes for job %s called" % jobname)
+    print("added nodes: ", nodes)    
 
     # discover host file
     discover_file_path = os.path.join(WORKING_DIR, "discover_host_" + jobname + ".sh")
@@ -147,7 +148,8 @@ def is_line_contain_delete_nodes(line, nodes):
     return flag
 
 def del_nodes_for_job(jobname, nodes):
-    print("delete node for job called")
+    print("delete node for job %s called" % jobname)
+    print("delete nodes: ", nodes)
 
     # del host from corresponding hostfile
     discover_file_path = os.path.join(WORKING_DIR, "discover_host_" + jobname + ".sh")
@@ -174,22 +176,18 @@ def adjust_nodes_by_map(new_map, old_map, job_info_dict):
     Args:
         newMap (dataframe): the input dataframe from optimizer
     """
+    print("adjust_nodes_by_map(newmap, oldmap, jobInfoDict) called")
+
     # map to dict
     old_job_nodes_dict = utils.get_job_nodes_mapping_from(old_map)
     new_job_nodes_dict = utils.get_job_nodes_mapping_from(new_map)
 
-    print("old job node dict",old_job_nodes_dict)
-    print("new job node dict",new_job_nodes_dict)
-    
     # Adjustment on job level
     oldjobs = list(old_job_nodes_dict.keys())
     newjobs = list(new_job_nodes_dict.keys())
 
     oldjobs.sort()
     newjobs.sort()
-
-    print("oldjob", oldjobs)
-    print("newjob", newjobs)
 
     # Job level adjustment
     if oldjobs != newjobs: # jobs changed
