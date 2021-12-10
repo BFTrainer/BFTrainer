@@ -35,6 +35,9 @@ class Manager:
         self.create_working_directory()
         self.buffer = Queue()
 
+        # create server ready to recv data
+        self.run_msg_server()
+
     current_map = pd.DataFrame()
     # A dictionary for global job information
     job_info_dict = {}
@@ -418,78 +421,6 @@ class Manager:
         
         # Update collect info to JobInfoDict
         self.update_scaling_and_cost_data_2_jobInfoDict(jobname=jobname, N=N, O=O, res_up=res_up, res_down=res_dw)
-    
-    '''
-    def update_job_data_on_freq(self, mserver):
-        print("start dynamic update Ns/Os and resup and down data")
-        while True:
-            time.sleep(10) # pin gap
-            print("update data every 10 seconds")
-            msg_items = []
-            msg_list = list(mserver.queue)
-            print("==================")
-            print(msg_list)
-
-            if len(msg_list) == 0:
-                continue
-
-            for msg in msg_list:
-                msg_item = utils.parser_udp_message(msg)
-                msg_items.append(msg_item)
-
-            # group by address
-            msg_items.sort(key=lambda x: x.address)
-            group_items = groupby(msg_items, lambda x: x.address)
-            
-            group_dict = {} # key:job val:group of iterations info for this job
-            for key, group in group_items:
-                hostname = utils.get_host_name_by_address(key)
-                print("====hostname====:", hostname)
-                jobname = utils.get_jobname_by_hostname(hostname, self.current_map)
-                print("jobname", jobname)
-                group_dict[jobname] = list(group)
-
-            # print("group dict", group_dict)
-
-            # print("cmap in update job data:", self.current_map)
-            
-            # get N and O
-            for jobname in group_dict:
-                job_items = group_dict[jobname]
-                job_items.sort(key=lambda x: x.rank_size)
-                group_job_items = groupby(job_items, lambda x: x.rank_size)
-                
-                print(group_job_items)
-
-                N = []
-                O = []
-                for key, group in group_job_items: # key: different rank size for job - group: items of this job with this ranksize
-                    node_num = int(key)/NUM_OF_GPUs_PER_NODE
-                    N.append(int(node_num))
-                    group_list = list(group)
-                    avg = sum([float(x.credit) for x in group_list])/len(group_list)
-                    O.append(avg)
-
-                # get res_up and res_down
-                job_items.sort(key=lambda x: x.id)
-                res_up = None
-                res_dw = None
-                if len(job_items) > 2:
-                    print("update res up and down")
-                    for i in range(len(job_items)-1,-1,-1): # reverse order find rank difference
-                        if job_items[i].rank_size > job_items[i-1].rank_size and job_items[i-1].rank_size == job_items[i-2].rank_size:
-                            print("================ get the res_up cost ===================")
-                            res_up = (job_items[i].time - job_items[i-1].time) - (job_items[i-1].time - job_items[i-2].time)
-                        elif job_items[i].rank_size < job_items[i-1].rank_size:
-                            print("================ get the res_down cost =================")
-                            res_dw = (job_items[i].time - job_items[i-1].time) - (job_items[i-1].time - job_items[i-2].time)
-                
-                print("res_up",res_up)
-                print("res_dw",res_dw)
-            
-            # Update collect info to JobInfoDict
-            self.dynamic_update_job_data(jobname=jobname, N=N, O=O, res_up=res_up, res_down=res_dw)
-        '''
 
     def run_msg_server(self):
         # run server daemon
@@ -562,14 +493,8 @@ class Manager:
 def main():
 
     # create manager
+    # basic settings and msg server
     m = Manager()
-    
-    # 1. create server ready to recv data
-    m.run_msg_server()
-
-    # print("start run update job data")
-    # p_updater = Thread(target=m.update_job_data_on_freq, args=(m.buffer,)) # for debugging
-    # p_updater.start()
 
     # 2. start jobs and run as events come
     p_events = Thread(target=m.events_launcher)
@@ -578,25 +503,6 @@ def main():
     # 3. process monitor job pid
     p_monitor = Thread(target=m.monitor_hvd_processes)
     p_monitor.start()
-    
-    '''
-    # Debug segments
-    # node leave
-    sleep(40)
-    print("================= node leave =======================")
-    print("sleep 40 Seconds and Node leave in main")
-    m.scheduler_nodes_change(JobNodeStatus.NODEOUT, ["thetagpu04"])
-
-    # node in
-    sleep(40)
-    print("=================== node in ======================")
-    print("node come back in main")
-    m.scheduler_nodes_change(JobNodeStatus.NODEIN, ["thetagpu04"])
-
-    # Process for monitor jobs job pids
-    p_monitor = Thread(target=m.monitor_hvd_processes)
-    p_monitor.start()
-    '''
 
 if __name__ == "__main__":
     main()
