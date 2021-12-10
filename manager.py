@@ -324,48 +324,34 @@ class Manager:
     def update_job_data_on_events(self, mserver, event_type):
         ''' job change or node change trigger updating data for re-allocation'''
 
-        # TODO: logic here could be improve. 
-
-        print('%s trigger updating data for re-allocation' % event_type)
-
-        msg_items = []
-        msg_list = list(mserver.queue)
-        print("========msg length in buffer: %d ==========" % len(msg_list))
-
-        if len(msg_list) == 0:
-            print("msg len 0 skip update process")
+        if len(mserver.buffer) == 0:
+            print("No valid information and skip update process")
             return
 
-        for msg in msg_list:
-            msg_item = utils.parser_udp_message(msg)
-            msg_items.append(msg_item)
- 
-        # group by address (hostname)
-        msg_items.sort(key=lambda x: x.address)
-        group_items = groupby(msg_items, lambda x: x.address)
-        
-        group_dict = {} # key:job val:group of iterations info for this job
-        for key, group in group_items:
-            
+        # get job msg_item dict
+        group_dict = {}
+        for key in mserver.buffer:
             hostname = utils.get_host_name_by_address(key)
-            print("find jobname by host name, the map is:")
-            
             jobname = utils.get_jobname_by_hostname(hostname, self.current_map)
-            
-            print("jobname we get", jobname)
-            print(self.current_map)
-            
+
             if jobname == "":
                 continue
-            print("update data event get name by address -- hostname: %s job name: %s" % (hostname, jobname))
-            group_dict[jobname] = list(group)
-        
+            
+            msg_list = list(mserver.buffer[key])
+            msg_items = []
+            for msg in msg_list:
+                msg_item = utils.parser_udp_message(msg)
+                msg_items.append(msg_item)
+    
+            group_dict[jobname] = msg_items
+
         # Cannot find job related
         if len(group_dict) == 0:
             print("Jobs in current_map has no any training msg in buffer, probably means all jobs are new fetched(not started yet)," \
             " do not need to use historial information to do the update, so return the update function here")
             return
 
+        # for each job sort by id or rank ect.
         for jobname in group_dict:
             job_items = group_dict[jobname]
             job_items.sort(key=lambda x: x.id) # sorted by id
