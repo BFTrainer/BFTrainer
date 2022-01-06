@@ -8,8 +8,7 @@ import horovod.torch as hvd
 import timeit
 import numpy as np
 import time
-from manager import Manager
-from manager import MessageOperator
+from msgOperator import MessageOperator
 
 # Benchmark settings
 parser = argparse.ArgumentParser(description='PyTorch Synthetic Benchmark',
@@ -26,7 +25,7 @@ parser.add_argument('--num-warmup-batches', type=int, default=1,
                     help='number of warm-up batches that don\'t count towards benchmark')
 parser.add_argument('--num-batches-per-iter', type=int, default=10,
                     help='number of batches per benchmark iteration')
-parser.add_argument('--num-iters', type=int, default=100,
+parser.add_argument('--num-iters', type=int, default=100000,
                     help='number of benchmark iterations')
 parser.add_argument('--num-batches-per-commit', type=int, default=10,
                     help='number of batches per commit of the elastic state object')
@@ -37,10 +36,16 @@ parser.add_argument('--no-cuda', action='store_true', default=False,
 parser.add_argument('--use-adasum', action='store_true', default=False,
                     help='use adasum algorithm to do reduction')
 
+parser.add_argument('--jobname', type = str, help='name of the job')
+
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 
 hvd.init()
+
+if hvd.rank() == 0:
+    print("create udp client")
+    mo = MessageOperator(address='172.23.2.189', port=9999)
 
 if args.cuda:
     # Horovod: pin GPU to local rank.
@@ -107,7 +112,6 @@ log('Batch size: %d' % args.batch_size)
 device = 'GPU' if args.cuda else 'CPU'
 log('Number of %ss: %d' % (device, hvd.size()))
 
-
 @hvd.elastic.run
 def run_benchmark(state):
    # Warm-up
@@ -121,17 +125,16 @@ def run_benchmark(state):
     if state.iter == 0:
         log('Running benchmark...')
 
-    if hvd.rank() == 0:
-        print("create udp client")
-        mo = MessageOperator(address='172.23.2.192', port=9999)
-
     for x in range(state.iter, args.num_iters):
-        time = timeit.timeit(lambda: benchmark_step(state), number=args.num_batches_per_iter)
-        img_sec = args.batch_size * args.num_batches_per_iter / time
-        log('Iter #%d: %.1f img/sec per %s' % (x, img_sec, device))
+        # time = timeit.timeit(lambda: benchmark_step(state), number=args.num_batches_per_iter)
+        # tick = time.time()
+        benchmark_step(state)
+        # img_sec = args.batch_size * hvd.size() / tick
+        # log('Iter #%d: %.1f img/sec per %s' % (x, img_sec, device))
         if hvd.rank() == 0:
-            mo.report(credit=args.batch_size * hvd.size(), rank_size = hvd.size())
-        state.img_secs.append(img_sec)
+            mo.report(credit=args.batch_size * hvd.size(), rank_size = hvd.size(), jobname=args.jobname)
+        
+        state.img_secs.append(0)
         state.iter = x
         state.commit()
 

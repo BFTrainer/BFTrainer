@@ -1,12 +1,23 @@
+import time
 import numpy as np
 import gurobipy as grb
 from scipy import interpolate
+import pandas as pd
+
 
 def interp1d4s(Ns, Os, Nx):
     f = interpolate.interp1d(Ns, Os, bounds_error=False, fill_value="extrapolate")
     return float(f(Nx))
 
 def re_allocate(cmap, jmin, jmax, Ns, Os, Tfwd, res_up, res_dw, time_limit): # tfwd 10 time_limit - 30 seconds
+    start_time = str(time.time())
+    joblist = cmap.index
+    nodelist= cmap.columns
+    with open("%s-b4.log" % start_time, 'w') as fp:
+        fp.write(cmap.to_string() + '\n')
+        fp.write(f"jmin={jmin}, jmax={jmax}, Ns={Ns}, Os={Os}, Tfwd={Tfwd}, res_up={res_up}, res_dw={res_dw}, time_limit={time_limit}\n")
+    cmap = cmap.values
+    
     nJ, nN = cmap.shape
     J = range(nJ)
     N = range(nN)
@@ -110,9 +121,24 @@ def re_allocate(cmap, jmin, jmax, Ns, Os, Tfwd, res_up, res_dw, time_limit): # t
     else:
         rate, cost = [], []
 
-    return opt_mdl.Status, sol_map, np.array(rate), np.array(cost)
+    sol_map_pd = pd.DataFrame(sol_map, index=joblist, columns=nodelist)
+    with open("%s-after.log" % start_time, 'w') as fp:
+        fp.write(sol_map_pd.to_string() + '\n')
+        fp.write(f"opt_mdl.Status={opt_mdl.Status}, rate={rate}, cost={cost}")
+        
+    if opt_mdl.Status == grb.GRB.OPTIMAL:
+        return opt_mdl.Status, sol_map, np.array(rate), np.array(cost)
+    else:
+        return opt_mdl.Status, cmap,    np.array(rate)*0, np.array(cost)*0
 
 def re_allocate_ndf(cmap, jmin, jmax, Ns, Os, res_up, res_dw):
+    start_time = str(time.time())
+    joblist = cmap.index
+    nodelist= cmap.columns
+    with open("%s-b4.log" % start_time, 'w') as fp:
+        fp.write(cmap.to_string() + '\n')
+        fp.write(f"jmin={jmin}, jmax={jmax}, Ns={Ns}, Os={Os}, Tfwd={-1}, res_up={res_up}, res_dw={res_dw}, time_limit={-1}\n")
+    cmap = cmap.values
     
     nJ, nN = cmap.shape
     J = range(nJ)
@@ -163,4 +189,9 @@ def re_allocate_ndf(cmap, jmin, jmax, Ns, Os, res_up, res_dw):
     cost = np.array(cost)
     cost[_nJ == _cnJ] = 0
 
+    sol_map_pd = pd.DataFrame(c_map, index=joblist, columns=nodelist)
+    with open("%s-after.log" % start_time, 'w') as fp:
+        fp.write(sol_map_pd.to_string() + '\n')
+        fp.write(f"opt_mdl.Status={grb.GRB.OPTIMAL}, rate={job_rate}, cost={cost}")
+    
     return grb.GRB.OPTIMAL, c_map, job_rate, cost

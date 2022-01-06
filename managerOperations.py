@@ -1,12 +1,11 @@
 import os
-import DBOperations
 from msgOperations import MSGOperations
 from subprocess import Popen
 import utils
 import psutil
 import stat
 
-NUM_OF_GPUs_PER_NODE = 1
+NUM_OF_GPUs_PER_NODE = 8
 WORKING_DIR = utils.working_dir()
 
 def create_working_directory():
@@ -14,42 +13,15 @@ def create_working_directory():
     if not work_dir:
         os.mkdir(WORKING_DIR)
 
-def submit_job(min, max, N, O, res_up, res_dw, path):
-
-    # node string
-    node_range_str = "min:%d max:%d" % (min, max)
-
-    # N and O string
-    n_str = "N:" + ",".join([str(_) for _ in N])
-    o_str = "O:" + ",".join([str(_) for _ in O])
-    
-    # res string
-    resup_str = "res_up:" + str(res_up)
-    resdown_str = "res_dw:" + str(res_dw)
-
-    # horovod command string
-    path_str = "path:" + path
-    jobString = " ".join([node_range_str, n_str, o_str, resup_str, resdown_str, path_str])
-
-    return DBOperations.submit_job_2_DBQueue(jobString)
-
-def get_job_queue_len():
-    return DBOperations.get_DB_queue_len()
-
-def get_a_job_from_DB():
-    if get_job_queue_len() > 0:
-        return DBOperations.get_Job_from_DBQueue()
-    else:
-        return None
-
 def create_msg_client(address, port):
-    return MSGOperations().create_udp_client(address, port)
+    return MSGOperations().create_msg_client(address, port)
 
 def create_msg_server(): # pass dynamic update data function into 
-    MSGOperations().create_udp_server()
+    MSGOperations().create_msg_server()
 
 def add_job(jobname, nodes, job_info_dict):
     print("Add job was called")
+    print("jobname %s on nodes %s" %(jobname, nodes))
     # if the job not being assigned node
     # just skip the process
     if nodes == None or len(nodes) == 0:
@@ -66,16 +38,15 @@ def add_job(jobname, nodes, job_info_dict):
 
     # 2. Launch new job and get process id
     with open("stdout.txt","w") as out, open("stderr.txt","w") as err:
-        print("before start new job")
         print("command", command)
         p = Popen(command, shell=True, env=myenv, stdout=out, stderr=err)
-        print("after start new job")
 
         hvdrunParentPid = p.pid
         fp = psutil.Process(hvdrunParentPid)
 
         hvdpid = fp.children()[0].pid
-        print("hvdpid is:", hvdpid)
+        print("new job launch success and the hvdpid is:", hvdpid)
+
         # 3. update process id to `jobInfoDict`
         jobItem = job_info_dict[jobname]
         jobItem.pid = hvdpid
@@ -83,8 +54,8 @@ def add_job(jobname, nodes, job_info_dict):
 def create_discovery_file(jobname, nodes):
     discovery_path = os.path.join(WORKING_DIR,"discover_host_" + jobname + ".sh")
     with open(discovery_path, 'w') as w:
-        w.write("#!/bin/bash\n")
-        #w.write("echo node06:0\n")
+        w.write("#!/bin/bash\n\n")
+        w.write("echo localhost:0\n")  # dummy computing node (the purpose for this line is for launch 1 node task at initial)
         for node in nodes:
             w.write("echo " + node + ":" + str(NUM_OF_GPUs_PER_NODE) + "\n")
 
@@ -94,11 +65,13 @@ def create_discovery_file(jobname, nodes):
     return discovery_path
 
 def generate_command(discover_file_path, jobname, job_info_dict):
+    print("jobname type", type(jobname))
     scriptPath = job_info_dict[jobname].path
-    command = "/lus/theta-fs0/software/thetagpu/conda/2021-06-26/mconda3/bin/horovodrun -np 1 --host-discovery-script " + discover_file_path + " python " + scriptPath
+    command = "/lus/theta-fs0/software/thetagpu/conda/2021-06-26/mconda3/bin/horovodrun -np 1 --host-discovery-script " + discover_file_path + " python " + scriptPath + " --jobname " + jobname
     return command
 
 def del_job(jobname, job_info_dict):
+    print("del job called")
     # 1. check the pid is running
     job_pid = job_info_dict[jobname].pid
     if job_pid == -1:
@@ -125,30 +98,46 @@ def del_discover_files(jobname):
 
 # Node changes
 def add_nodes_for_job(jobname, nodes):
-    if len(nodes) == 0:
-        return
+    print("add nodes for job %s called" % jobname)
+    print("added nodes: ", nodes)    
 
-    host_file_path = os.path.join(WORKING_DIR, jobname + "_hostfile") 
-    if os.path.exists(host_file_path):
-        with open(host_file_path, 'a') as w:
+    # discover host file
+    discover_file_path = os.path.join(WORKING_DIR, "discover_host_" + jobname + ".sh")
+    
+    # Write node info to discover file
+    if os.path.exists(discover_file_path):
+        with open(discover_file_path, 'a') as w:
             for node in nodes:
-                w.write(node + ":" + str(NUM_OF_GPUs_PER_NODE)  + "\n")
+                w.write("echo " + node + ":" + str(NUM_OF_GPUs_PER_NODE) + "\n")
+
+def is_line_contain_delete_nodes(line, nodes):
+    flag = False
+    for node in nodes:
+        if node in line:
+            flag = True
+            break
+    return flag
 
 def del_nodes_for_job(jobname, nodes):
+    print("delete node for job %s called" % jobname)
+    print("delete nodes: ", nodes)
+
     # del host from corresponding hostfile
-    host_file_path = os.path.join(WORKING_DIR, jobname + "_hostfile")
-    if os.path.exists(host_file_path):
+    discover_file_path = os.path.join(WORKING_DIR, "discover_host_" + jobname + ".sh")
+    if os.path.exists(discover_file_path):
+        # Read the file filtered out the delete node line and put it back
         lines = []
-        with open(host_file_path, 'r') as r:
+        with open(discover_file_path, 'r') as r:
             lines = r.readlines()
         
+        # filter out deleted nodes
         new_lines = []
-        for node in nodes:
-            for line in lines:
-                if node not in line:
-                    new_lines.append(line)
+        for line in lines:
+            if is_line_contain_delete_nodes(line, nodes) == False:
+                new_lines.append(line)
 
-        with open(host_file_path, 'a') as w:
+        # write back
+        with open(discover_file_path, 'w') as w:
             for line in new_lines:
                 w.write(line)
 
@@ -158,13 +147,12 @@ def adjust_nodes_by_map(new_map, old_map, job_info_dict):
     Args:
         newMap (dataframe): the input dataframe from optimizer
     """
+    print("adjust_nodes_by_map(newmap, oldmap, jobInfoDict) called")
+
     # map to dict
     old_job_nodes_dict = utils.get_job_nodes_mapping_from(old_map)
     new_job_nodes_dict = utils.get_job_nodes_mapping_from(new_map)
-    
-    print("old dict",old_job_nodes_dict)
-    print("new dict",new_job_nodes_dict)
-    
+
     # Adjustment on job level
     oldjobs = list(old_job_nodes_dict.keys())
     newjobs = list(new_job_nodes_dict.keys())
@@ -172,25 +160,26 @@ def adjust_nodes_by_map(new_map, old_map, job_info_dict):
     oldjobs.sort()
     newjobs.sort()
 
-    if oldjobs != newjobs:
+    # Job level adjustment
+    if oldjobs != newjobs: # jobs changed
         for oldjob in oldjobs:
-            if oldjob not in newjobs:
-                del_job(oldjob) 
+            if oldjob not in newjobs: # job in old not in new (del this job)
+                del_job(oldjob)
         
         for newjob in newjobs:
-            if newjob not in oldjobs:
-                print("mark 1 add job before")
+            if newjob not in oldjobs: # job in new not in old (add this job)
                 add_job(newjob, new_job_nodes_dict[newjob], job_info_dict)
-                print("makr 1 add job after")
     
-    # Adjustment on node level
+    # Node level adjustment
     overlappedJobs = utils.get_lists_overlap(newjobs, oldjobs)
 
     # for each job check node changes
+    # Only jobs in both old and new(overlabppedJobs) have node level changes
     for job in overlappedJobs:
         old_nodes = old_job_nodes_dict[job]
         new_nodes = new_job_nodes_dict[job]
-        # nothing changed skip
+        
+        # check diff
         if set(old_nodes) != set(new_nodes):
             # pid = -1 means this job never launched before
             # len(old_nodes) == 0 means the no node assigned for this job
@@ -200,7 +189,10 @@ def adjust_nodes_by_map(new_map, old_map, job_info_dict):
             
             # job existed adjust nodes only
             intersectionNodes = utils.get_lists_overlap(old_nodes, new_nodes)
-            addNodes =list(set(new_nodes) - set(intersectionNodes))
-            add_nodes_for_job(jobname=job, nodes=addNodes)
-            delNodes = list(set(old_nodes) - set(intersectionNodes))
-            del_nodes_for_job(jobname=job, nodes=delNodes)
+            addNodes =list(set(new_nodes) - set(intersectionNodes)) # node to be added
+            if addNodes:
+                add_nodes_for_job(jobname=job, nodes=addNodes)
+            
+            delNodes = list(set(old_nodes) - set(intersectionNodes)) # node to be deleted
+            if delNodes:
+                del_nodes_for_job(jobname=job, nodes=delNodes)
