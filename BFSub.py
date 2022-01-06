@@ -1,5 +1,7 @@
 import argparse
 from manager import Manager
+import utils
+
 
 parser = argparse.ArgumentParser(description="User need to submit job informations")
 parser.add_argument('--min', type=int, required=True, help='min num of nodes')
@@ -12,8 +14,7 @@ parser.add_argument('--path', required=True, help="execute script path")
 args = parser.parse_args()
 
 def main():
-    m = Manager(max_parallel=10, monitor_gap=10)
-    id = m.submit_job(min=args.min, max=args.max, N=args.N, 
+    id = utils.submit_job(min=args.min, max=args.max, N=args.N, 
                     O=args.O, res_up=args.res_up, res_dw=args.res_dw, path=args.path)
     print("Job submitted! GUID:", str(id))
 

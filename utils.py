@@ -1,6 +1,7 @@
 from jobInfo import JobInfo
 import os
 import socket
+import DBOperations
 
 class UDP_Msg:
     def __init__(self, address, id, time, rank_size, credit):
@@ -127,15 +128,18 @@ def parser_udp_message(msg):
     items = msg.split(" ")
     address = items[0].split(":")[-1]
     id = items[1].split(":")[-1]
-    time = items[2].split(":")[-1]
-    rank_size = items[3].split(":")[-1]
-    credit = items[4].split(":")[-1]
+    time = float(items[2].split(":")[-1])
+    rank_size = int(items[3].split(":")[-1])
+    credit = float(items[4].split(":")[-1])
 
     return UDP_Msg(address, id, time, rank_size, credit)
 
 def working_dir():
     home = os.path.expanduser("~")
     return os.path.join(home, ".BFTrainer")
+
+def DB_path():
+    return os.path.join(working_dir(), "jobdata.db")
 
 def is_theta_cluster():
     if socket.gethostname().startswith("theta"):
@@ -147,3 +151,32 @@ def get_host_name_by_address(address):
     # this resolve is specific for thetagpu cluster
     hostname = host_tuple[0].split(".")[0]
     return hostname
+
+## DB Operations
+def submit_job(min, max, N, O, res_up, res_dw, path):
+
+    # node string
+    node_range_str = "min:%d max:%d" % (min, max)
+
+    # N and O string
+    n_str = "N:" + ",".join([str(_) for _ in N])
+    o_str = "O:" + ",".join([str(_) for _ in O])
+    
+    # res string
+    resup_str = "res_up:" + str(res_up)
+    resdown_str = "res_dw:" + str(res_dw)
+
+    # horovod command string
+    path_str = "path:" + path
+    jobString = " ".join([node_range_str, n_str, o_str, resup_str, resdown_str, path_str])
+
+    return DBOperations.submit_job_2_DBQueue(DB_path(), jobString)
+
+def get_job_queue_len():
+    return DBOperations.get_DB_queue_len(DB_path())
+
+def get_a_job_from_DB():
+    if get_job_queue_len() > 0:
+        return DBOperations.get_Job_from_DBQueue(DB_path())
+    else:
+        return None

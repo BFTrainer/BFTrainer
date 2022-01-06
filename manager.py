@@ -321,26 +321,34 @@ class Manager:
         if res_down != None:
             job_item.res_down = res_down
 
-    def update_job_data_on_events(self, mserver, event_type):
+    def update_job_data_on_events(self, buffer, event_type):
         ''' job change or node change trigger updating data for re-allocation'''
 
-        if len(mserver.buffer) == 0:
+        if len(buffer) == 0:
             print("No valid information and skip update process")
             return
 
+        print("buffer len:",len(buffer))
+
+        for key in buffer:
+            print("buffer item len:", len(buffer[key]))
+
         # get job msg_item dict
         group_dict = {}
-        for key in mserver.buffer:
+        for key in buffer:
             hostname = utils.get_host_name_by_address(key)
             jobname = utils.get_jobname_by_hostname(hostname, self.current_map)
 
             if jobname == "":
                 continue
             
-            msg_list = list(mserver.buffer[key])
+            msg_list = buffer[key]
             msg_items = []
             for msg in msg_list:
                 msg_item = utils.parser_udp_message(msg)
+                print("======msg information=======")
+                print(msg_item.address)
+                print(msg_item.credit)
                 msg_items.append(msg_item)
     
             group_dict[jobname] = msg_items
@@ -392,14 +400,14 @@ class Manager:
                     
                     if job_items[i].rank_size > job_items[i-1].rank_size and job_items[i-1].rank_size == job_items[i-2].rank_size:
                         print("================ get the res_up cost ===================")
-                        res_up = (float(job_items[i].time) - float(job_items[i-1].time)) - (float(job_items[i-1].time) - float(job_items[i-2].time))
+                        res_up = (job_items[i].time - job_items[i-1].time) - (job_items[i-1].time - job_items[i-2].time)
                         print("==resup==", res_up)
 
                     elif job_items[i].rank_size < job_items[i-1].rank_size and job_items[i-1].rank_size == job_items[i-2].rank_size:
                         print("================ get the res_down cost =================")
                         print(type(job_items[i].time))
                         print(job_items[i].time)
-                        res_dw = (float(job_items[i].time) - float(job_items[i-1].time)) - (float(job_items[i-1].time) - float(job_items[i-2].time))
+                        res_dw = (job_items[i].time - job_items[i-1].time) - (job_items[i-1].time - job_items[i-2].time)
                         print("==resdw==", res_dw)
 
             print("res_up", res_up)
@@ -489,6 +497,10 @@ def main():
     # 3. process monitor job pid
     p_monitor = Thread(target=m.monitor_hvd_processes)
     p_monitor.start()
+
+    # for local testing purpose
+    
+
 
 if __name__ == "__main__":
     main()

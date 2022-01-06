@@ -1,5 +1,4 @@
 import os
-import DBOperations
 from msgOperations import MSGOperations
 from subprocess import Popen
 import utils
@@ -13,34 +12,6 @@ def create_working_directory():
     work_dir = os.path.exists(WORKING_DIR)
     if not work_dir:
         os.mkdir(WORKING_DIR)
-
-def submit_job(min, max, N, O, res_up, res_dw, path):
-
-    # node string
-    node_range_str = "min:%d max:%d" % (min, max)
-
-    # N and O string
-    n_str = "N:" + ",".join([str(_) for _ in N])
-    o_str = "O:" + ",".join([str(_) for _ in O])
-    
-    # res string
-    resup_str = "res_up:" + str(res_up)
-    resdown_str = "res_dw:" + str(res_dw)
-
-    # horovod command string
-    path_str = "path:" + path
-    jobString = " ".join([node_range_str, n_str, o_str, resup_str, resdown_str, path_str])
-
-    return DBOperations.submit_job_2_DBQueue(jobString)
-
-def get_job_queue_len():
-    return DBOperations.get_DB_queue_len()
-
-def get_a_job_from_DB():
-    if get_job_queue_len() > 0:
-        return DBOperations.get_Job_from_DBQueue()
-    else:
-        return None
 
 def create_msg_client(address, port):
     return MSGOperations().create_msg_client(address, port)
