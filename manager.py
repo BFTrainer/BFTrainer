@@ -46,22 +46,6 @@ class Manager:
     def create_working_directory(self):
         managerOperations.create_working_directory()
 
-    # DBOperatioin
-    def submit_job(self, min, max, N, O, res_up, res_dw, path):
-        """
-        Function for user to submit jobs
-        """
-        return managerOperations.submit_job(min, max, N, O, res_up, res_dw, path)
-
-    def get_job_queue_len(self):
-        """
-        Function for user to get job queueu length
-        """
-        return managerOperations.get_job_queue_len()
-
-    def _get_a_job_from_DB(self):
-        return managerOperations.get_a_job_from_DB()
-    
     # Network Operations
     def create_msg_client(self, address, port):
         """Create a message client by client for reporting training throughput/speed.
@@ -85,13 +69,13 @@ class Manager:
         if len(sys_nodes) == 0 or (sys_nodes is None):
             return
         
-        if self.get_job_queue_len() == 0:
+        if utils.get_job_queue_len() == 0:
             return
         
         # fetch job from DB
-        starting_jobs_num = min(MAXIMUM_PARALLEL, self.get_job_queue_len())
+        starting_jobs_num = min(MAXIMUM_PARALLEL, utils.get_job_queue_len())
         for i in range(starting_jobs_num):
-            job_string = self._get_a_job_from_DB()
+            job_string = utils.get_a_job_from_DB()
             jobdetail = utils.parser_job_string_2_job_item(job_string)
             self.job_info_dict[jobdetail.GUID] = jobdetail
         
@@ -138,14 +122,14 @@ class Manager:
         print(self.max_parallel)
         print("lacking_len: ", lacking_len)
 
-        left_jobs_in_db = self.get_job_queue_len()
+        left_jobs_in_db = utils.get_job_queue_len()
         print("There are %d jobs left in database" % left_jobs_in_db)
 
         job_num = min(lacking_len, left_jobs_in_db)
         print("fetched valid job number:", job_num)
 
         for i in range(job_num):
-            jobstring = self._get_a_job_from_DB()
+            jobstring = utils.get_a_job_from_DB()
             print("fetch new job: ", jobstring)
             job_string_list.append(jobstring)
             jobdetail = utils.parser_job_string_2_job_item(jobstring)
@@ -321,51 +305,45 @@ class Manager:
         if res_down != None:
             job_item.res_down = res_down
 
-    def update_job_data_on_events(self, mserver, event_type):
+    def update_job_data_on_events(self, buffer, event_type):
         ''' job change or node change trigger updating data for re-allocation'''
 
-        # TODO: logic here could be improve. 
-
-        print('%s trigger updating data for re-allocation' % event_type)
-
-        msg_items = []
-        msg_list = list(mserver.queue)
-        print("========msg length in buffer: %d ==========" % len(msg_list))
-
-        if len(msg_list) == 0:
-            print("msg len 0 skip update process")
+        if len(buffer) == 0:
+            print("No valid information and skip update process")
             return
 
-        for msg in msg_list:
-            msg_item = utils.parser_udp_message(msg)
-            msg_items.append(msg_item)
- 
-        # group by address (hostname)
-        msg_items.sort(key=lambda x: x.address)
-        group_items = groupby(msg_items, lambda x: x.address)
-        
-        group_dict = {} # key:job val:group of iterations info for this job
-        for key, group in group_items:
-            
+        print("buffer len:",len(buffer))
+
+        for key in buffer:
+            print("buffer item len:", len(buffer[key]))
+
+        # get job msg_item dict
+        group_dict = {}
+        for key in buffer:
             hostname = utils.get_host_name_by_address(key)
-            print("find jobname by host name, the map is:")
-            
             jobname = utils.get_jobname_by_hostname(hostname, self.current_map)
-            
-            print("jobname we get", jobname)
-            print(self.current_map)
-            
+
             if jobname == "":
                 continue
-            print("update data event get name by address -- hostname: %s job name: %s" % (hostname, jobname))
-            group_dict[jobname] = list(group)
-        
+            
+            msg_list = buffer[key]
+            msg_items = []
+            for msg in msg_list:
+                msg_item = utils.parser_udp_message(msg)
+                print("======msg information=======")
+                print(msg_item.address)
+                print(msg_item.credit)
+                msg_items.append(msg_item)
+    
+            group_dict[jobname] = msg_items
+
         # Cannot find job related
         if len(group_dict) == 0:
             print("Jobs in current_map has no any training msg in buffer, probably means all jobs are new fetched(not started yet)," \
             " do not need to use historial information to do the update, so return the update function here")
             return
 
+        # for each job sort by id or rank ect.
         for jobname in group_dict:
             job_items = group_dict[jobname]
             job_items.sort(key=lambda x: x.id) # sorted by id
@@ -406,14 +384,14 @@ class Manager:
                     
                     if job_items[i].rank_size > job_items[i-1].rank_size and job_items[i-1].rank_size == job_items[i-2].rank_size:
                         print("================ get the res_up cost ===================")
-                        res_up = (float(job_items[i].time) - float(job_items[i-1].time)) - (float(job_items[i-1].time) - float(job_items[i-2].time))
+                        res_up = (job_items[i].time - job_items[i-1].time) - (job_items[i-1].time - job_items[i-2].time)
                         print("==resup==", res_up)
 
                     elif job_items[i].rank_size < job_items[i-1].rank_size and job_items[i-1].rank_size == job_items[i-2].rank_size:
                         print("================ get the res_down cost =================")
                         print(type(job_items[i].time))
                         print(job_items[i].time)
-                        res_dw = (float(job_items[i].time) - float(job_items[i-1].time)) - (float(job_items[i-1].time) - float(job_items[i-2].time))
+                        res_dw = (job_items[i].time - job_items[i-1].time) - (job_items[i-1].time - job_items[i-2].time)
                         print("==resdw==", res_dw)
 
             print("res_up", res_up)
@@ -503,6 +481,10 @@ def main():
     # 3. process monitor job pid
     p_monitor = Thread(target=m.monitor_hvd_processes)
     p_monitor.start()
+
+    # for local testing purpose
+    
+
 
 if __name__ == "__main__":
     main()
