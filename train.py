@@ -43,6 +43,10 @@ args.cuda = not args.no_cuda and torch.cuda.is_available()
 
 hvd.init()
 
+if hvd.rank() == 0:
+    print("create udp client")
+    mo = MessageOperator(address='172.23.2.189', port=9999)
+
 if args.cuda:
     # Horovod: pin GPU to local rank.
     torch.cuda.set_device(hvd.local_rank())
@@ -108,7 +112,6 @@ log('Batch size: %d' % args.batch_size)
 device = 'GPU' if args.cuda else 'CPU'
 log('Number of %ss: %d' % (device, hvd.size()))
 
-
 @hvd.elastic.run
 def run_benchmark(state):
    # Warm-up
@@ -121,10 +124,6 @@ def run_benchmark(state):
     # Benchmark
     if state.iter == 0:
         log('Running benchmark...')
-
-    if hvd.rank() == 0:
-        print("create udp client")
-        mo = MessageOperator(address='172.23.2.198', port=9999)
 
     for x in range(state.iter, args.num_iters):
         # time = timeit.timeit(lambda: benchmark_step(state), number=args.num_batches_per_iter)

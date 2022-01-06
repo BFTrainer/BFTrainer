@@ -1,5 +1,6 @@
 import socket
 from queue import Queue
+from typing import List
 
 # This address is for 
 # ADDRESS = '172.23.2.202' # thetagpu14
@@ -14,10 +15,8 @@ class MSGOperations:
     # Sever - manager side
     def create_msg_server(self):
         try:
-
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.bind((ADDRESS, PORT))
-
             print("create udp server success")
             w = open("msg.log", "w")
             while True:
@@ -28,12 +27,12 @@ class MSGOperations:
 
                 if addr[0] in self.buffer:
                     tmp_que = self.buffer[addr[0]]
-                    if tmp_que.qsize() >= 20:
-                        tmp_que.get()
-                    tmp_que.put(msg)
+                    if len(tmp_que) >= 100:
+                        tmp_que.pop(0)
+                    tmp_que.append(msg)
                 else:
-                    q = Queue()
-                    q.put(msg)
+                    q = []
+                    q.append(msg)
                     self.buffer[addr[0]] = q
 
                 w.write(msg + '\n')
@@ -41,7 +40,7 @@ class MSGOperations:
                 # print(msg)
                 # print("queue size: ", self.buffer.qsize())
         except Exception as ex:
-            print("Create Server failed")
+            print("Create UDP Server failed")
             print(ex)
             s.close()
 

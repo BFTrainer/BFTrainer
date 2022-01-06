@@ -46,22 +46,6 @@ class Manager:
     def create_working_directory(self):
         managerOperations.create_working_directory()
 
-    # DBOperatioin
-    def submit_job(self, min, max, N, O, res_up, res_dw, path):
-        """
-        Function for user to submit jobs
-        """
-        return managerOperations.submit_job(min, max, N, O, res_up, res_dw, path)
-
-    def get_job_queue_len(self):
-        """
-        Function for user to get job queueu length
-        """
-        return managerOperations.get_job_queue_len()
-
-    def _get_a_job_from_DB(self):
-        return managerOperations.get_a_job_from_DB()
-    
     # Network Operations
     def create_msg_client(self, address, port):
         """Create a message client by client for reporting training throughput/speed.
@@ -85,13 +69,13 @@ class Manager:
         if len(sys_nodes) == 0 or (sys_nodes is None):
             return
         
-        if self.get_job_queue_len() == 0:
+        if utils.get_job_queue_len() == 0:
             return
         
         # fetch job from DB
-        starting_jobs_num = min(MAXIMUM_PARALLEL, self.get_job_queue_len())
+        starting_jobs_num = min(MAXIMUM_PARALLEL, utils.get_job_queue_len())
         for i in range(starting_jobs_num):
-            job_string = self._get_a_job_from_DB()
+            job_string = utils.get_a_job_from_DB()
             jobdetail = utils.parser_job_string_2_job_item(job_string)
             self.job_info_dict[jobdetail.GUID] = jobdetail
         
@@ -138,14 +122,14 @@ class Manager:
         print(self.max_parallel)
         print("lacking_len: ", lacking_len)
 
-        left_jobs_in_db = self.get_job_queue_len()
+        left_jobs_in_db = utils.get_job_queue_len()
         print("There are %d jobs left in database" % left_jobs_in_db)
 
         job_num = min(lacking_len, left_jobs_in_db)
         print("fetched valid job number:", job_num)
 
         for i in range(job_num):
-            jobstring = self._get_a_job_from_DB()
+            jobstring = utils.get_a_job_from_DB()
             print("fetch new job: ", jobstring)
             job_string_list.append(jobstring)
             jobdetail = utils.parser_job_string_2_job_item(jobstring)
