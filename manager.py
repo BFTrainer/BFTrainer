@@ -164,7 +164,7 @@ class Manager:
         print("After re-allocation jobs get the new map")
         print(self.current_map)
 
-    def scheduler_nodes_change(self, flag, nodes):
+    def scheduler_nodes_change(self, flag, nodes): 
         print("node change called")
 
         # Event driven update data here
@@ -305,18 +305,7 @@ class Manager:
         if res_down != None:
             job_item.res_down = res_down
 
-    def update_job_data_on_events(self, buffer, event_type):
-        ''' job change or node change trigger updating data for re-allocation'''
-
-        if len(buffer) == 0:
-            print("No valid information and skip update process")
-            return
-
-        print("buffer len:",len(buffer))
-
-        for key in buffer:
-            print("buffer item len:", len(buffer[key]))
-
+    def _get_group_dict(self, buffer):
         # get job msg_item dict
         group_dict = {}
         for key in buffer:
@@ -330,29 +319,58 @@ class Manager:
             msg_items = []
             for msg in msg_list:
                 msg_item = utils.parser_udp_message(msg)
-                print("======msg information=======")
-                print(msg_item.address)
-                print(msg_item.credit)
                 msg_items.append(msg_item)
-    
             group_dict[jobname] = msg_items
+        
+        return group_dict
 
-        # Cannot find job related
+    def _cal_res_up_res_dw(self, job_items):
+        res_up, res_dw = None, None
+        if len(job_items) > 2:
+            print("update res_up and res_dw")
+
+            for i in range(len(job_items)-1,-1,-1): # reverse order find rank difference
+                
+                if job_items[i].rank_size > job_items[i-1].rank_size and job_items[i-1].rank_size == job_items[i-2].rank_size:
+                    print("================ get the res_up cost ===================")
+                    res_up = (job_items[i].time - job_items[i-1].time) - (job_items[i-1].time - job_items[i-2].time)
+                    print("==resup==", res_up)
+
+                elif job_items[i].rank_size < job_items[i-1].rank_size and job_items[i-1].rank_size == job_items[i-2].rank_size:
+                    print("================ get the res_down cost =================")
+                    print(type(job_items[i].time))
+                    print(job_items[i].time)
+                    res_dw = (job_items[i].time - job_items[i-1].time) - (job_items[i-1].time - job_items[i-2].time)
+                    print("==resdw==", res_dw)
+        return res_up, res_dw
+
+
+    def update_job_data_on_events(self, buffer, event_type):
+        ''' job change or node change trigger updating data for re-allocation'''
+        if len(buffer) == 0:
+            print("No valid information and skip update process")
+            return
+        
+        group_dict = self._get_group_dict(buffer)
+
         if len(group_dict) == 0:
             print("Jobs in current_map has no any training msg in buffer, probably means all jobs are new fetched(not started yet)," \
             " do not need to use historial information to do the update, so return the update function here")
             return
 
-        # for each job sort by id or rank ect.
+        # for each job get the cost and thrpt info
         for jobname in group_dict:
             job_items = group_dict[jobname]
-            job_items.sort(key=lambda x: x.id) # sorted by id
-            job_items.sort(key=lambda x: x.rank_size)
-            group_job_items = groupby(job_items, lambda x: x.rank_size)
+            
+            # we will assume the id is right for now
+            # job_items.sort(key=lambda x: x.id)
 
+            res_up, res_dw = self._cal_res_up_res_dw(job_items)
+
+            # TODO: the cal throughput part need to change(use latest throughput)
             N = []
             O = []
-            for key, group in group_job_items: # key: different rank size for job - group: items of this job with this ranksize
+            for key, group in groupby(job_items, lambda x: x.rank_size): # key: different rank size for job - group: items of this job with this ranksize
                 node_num = int(key)/NUM_OF_GPUs_PER_NODE
                 N.append(int(node_num))
                 group_list = list(group)
@@ -365,37 +383,6 @@ class Manager:
                 avg_thrput = thrputs[-1] # use the last thrput as the current thrput
 
                 O.append(avg_thrput)
-
-            # get res_up and res_down
-            job_items.sort(key=lambda x: x.id)
-            res_up = None
-            res_dw = None
-            if len(job_items) > 2:
-                print("update res_up and res_dw")
-
-                for i in range(len(job_items)-1,-1,-1): # reverse order find rank difference
-                    '''
-                    print("i rank_size:", job_items[i].rank_size)
-                    print("i- 1 rank_size:", job_items[i-1].rank_size)
-                    print("i - 2 rank_size:", job_items[i-2].rank_size)
-                    print(type(job_items[i-2].rank_size))
-                    print("idx value: ", i)
-                    '''
-                    
-                    if job_items[i].rank_size > job_items[i-1].rank_size and job_items[i-1].rank_size == job_items[i-2].rank_size:
-                        print("================ get the res_up cost ===================")
-                        res_up = (job_items[i].time - job_items[i-1].time) - (job_items[i-1].time - job_items[i-2].time)
-                        print("==resup==", res_up)
-
-                    elif job_items[i].rank_size < job_items[i-1].rank_size and job_items[i-1].rank_size == job_items[i-2].rank_size:
-                        print("================ get the res_down cost =================")
-                        print(type(job_items[i].time))
-                        print(job_items[i].time)
-                        res_dw = (job_items[i].time - job_items[i-1].time) - (job_items[i-1].time - job_items[i-2].time)
-                        print("==resdw==", res_dw)
-
-            print("res_up", res_up)
-            print("res_dw", res_dw)
         
         # Update collect info to JobInfoDict
         self.update_scaling_and_cost_data_2_jobInfoDict(jobname=jobname, N=N, O=O, res_up=res_up, res_down=res_dw)
