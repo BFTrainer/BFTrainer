@@ -8,7 +8,7 @@ from enum import Enum
 from collections import OrderedDict
 
 import utils
-from prog import re_allocate
+from progMIP import re_allocate
 import psutil
 import numpy as np
 import managerOperations
