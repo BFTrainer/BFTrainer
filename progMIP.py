@@ -1,12 +1,17 @@
+import time
 import numpy as np
 from scipy import interpolate
 from mip import Model, xsum, maximize, BINARY, CONTINUOUS, INTEGER, OptimizationStatus, CBC
+import pandas as pd
 
 def interp1d4s(Ns, Os, Nx):
     f = interpolate.interp1d(Ns, Os)
     return float(f(Nx))
 
 def re_allocate(cmap, jmin, jmax, Ns, Os, Tfwd, res_up, res_dw, time_limit, solver=CBC):
+    start_time = str(time.time())
+    joblist = cmap.index
+    nodelist= cmap.columns
     nJ, nN = cmap.shape
     J = range(nJ)
     N = range(nN)
@@ -15,7 +20,11 @@ def re_allocate(cmap, jmin, jmax, Ns, Os, Tfwd, res_up, res_dw, time_limit, solv
     _cNj = cmap.sum(axis=1)
     c_rate = [interp1d4s(Ns[_j], Os[_j], _cNj[_j]) \
               if _cNj[_j] >= jmin[_j] else 0 for _j in range(cmap.shape[0])]
-    
+
+    with open("%s-b4.log" % start_time, 'w') as fp:
+        fp.write(cmap.to_string() + '\n')
+        fp.write(f"jmin={jmin}, jmax={jmax}, Ns={Ns}, Os={Os}, Tfwd={Tfwd}, res_up={res_up}, res_dw={res_dw}, time_limit={time_limit}\n")
+
     c_map = cmap.values
         
     m = Model(solver_name=solver)
@@ -118,5 +127,10 @@ def re_allocate(cmap, jmin, jmax, Ns, Os, Tfwd, res_up, res_dw, time_limit, solv
         cost = [(dummy4upcost[_j] * res_up[_j] * c_rate[_j] + dummy4dwcost[_j] * res_dw[_j] * c_rate[_j]) for _j in J]
     else:
         rate, cost = [], []
-
+    
+    sol_map_pd = pd.DataFrame(sol_map, index=joblist, columns=nodelist)
+    with open("%s-after.log" % start_time, 'w') as fp:
+        fp.write(sol_map_pd.to_string() + '\n')
+        fp.write(f"opt_mdl.Status={status}, rate={rate}, cost={cost}")
+        
     return status, sol_map, np.array(rate), np.array(cost)
