@@ -293,17 +293,17 @@ class Manager:
                 job_item.O = O
             else:
                 # if not None then get the merged N and O
-                res_N, res_O = self.merge_ordered_NO_2_itemNO(job_N=job_item.N, job_O=job_item.O, N=N, O=O)
+                merged_N, merged_O = self.merge_ordered_NO_2_itemNO(job_N=job_item.N, job_O=job_item.O, N=N, O=O)
 
                 # update job item
-                job_item.N = res_N
-                job_item.O = res_O
+                job_item.N = merged_N
+                job_item.O = merged_O
         
         if res_up != None:
-            job_item.res_up = res_up
+            job_item.res_up = [res_up , True]
 
         if res_down != None:
-            job_item.res_down = res_down
+            job_item.res_down = [res_down, True]
 
     def _get_group_dict(self, buffer):
         # get job msg_item dict
@@ -342,6 +342,10 @@ class Manager:
                     print(job_items[i].time)
                     res_dw = (job_items[i].time - job_items[i-1].time) - (job_items[i-1].time - job_items[i-2].time)
                     print("==resdw==", res_dw)
+
+                if i <= 2:
+                    break
+
         return res_up, res_dw
 
 
@@ -382,7 +386,7 @@ class Manager:
                     thrputs.append(thrput)
                 avg_thrput = thrputs[-1] # use the last thrput as the current thrput
 
-                O.append(avg_thrput)
+                O.append([avg_thrput, True])
         
         # Update collect info to JobInfoDict
         self.update_scaling_and_cost_data_2_jobInfoDict(jobname=jobname, N=N, O=O, res_up=res_up, res_down=res_dw)
@@ -470,8 +474,6 @@ def main():
     p_monitor.start()
 
     # for local testing purpose
-    
-
 
 if __name__ == "__main__":
     main()

@@ -81,9 +81,9 @@ def get_optimizer_parameters_by_job_dict(jobInfoDict):
         mins.append(int(jobdetail.min))
         maxs.append(int(jobdetail.max))
         Ns.append(jobdetail.N)
-        Os.append(jobdetail.O)
-        res_ups.append(float(jobdetail.resUp)) # need to profile upon specific job
-        res_dws.append(float(jobdetail.resDown)) # need to profile upon specific job
+        Os.append(jobdetail.O[0])
+        res_ups.append(float(jobdetail.resUp[0])) # need to profile upon specific job
+        res_dws.append(float(jobdetail.resDown[0])) # need to profile upon specific job
 
     return mins, maxs, Ns, Os, res_ups, res_dws
 

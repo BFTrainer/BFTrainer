@@ -8,7 +8,7 @@ class JobInfo:
         self.max = max
         self.min = min
         self.N = N
-        self.O = O
-        self.resUp = resUp
-        self.resDown = resDown
+        self.O = [O, [False for i in range(len(O))]]
+        self.resUp = [resUp, False]
+        self.resDown = [resDown, False]
         self.path = path
