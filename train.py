@@ -45,7 +45,7 @@ hvd.init()
 
 if hvd.rank() == 0:
     print("create udp client")
-    mo = MessageOperator(address='172.23.2.189', port=9999)
+    mo = MessageOperator(address='172.23.2.191', port=9999)
 
 if args.cuda:
     # Horovod: pin GPU to local rank.
@@ -120,7 +120,7 @@ def run_benchmark(state):
         timeit.timeit(lambda: benchmark_step(state), number=args.num_warmup_batches)
         state.warm = True
         state.commit()
-
+    
     # Benchmark
     if state.iter == 0:
         log('Running benchmark...')

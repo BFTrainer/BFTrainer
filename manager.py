@@ -1,7 +1,8 @@
+
 from itertools import groupby
 from queue import Queue
 import time
-import sys
+import copy
 
 import pandas as pd
 from enum import Enum
@@ -17,16 +18,22 @@ import sys_admin
 from threading import Thread
 import trace_generator
 
-MAXIMUM_PARALLEL = 2 # 
+MAXIMUM_PARALLEL = 2 #
 
 MONITOR_GAP = 20
 NUM_OF_GPUs_PER_NODE = 8 #
 
-class JobNodeStatus(Enum):
+PROFILE_RESOURCES_NEEDED = 4
+
+class GlobalEventsType(Enum):
     JOBFAILED=0
     JOBOUT=1
     NODEIN=2
     NODEOUT=3
+    PROFILING=4
+
+# TODO: Delete the following comments
+# 这里边目前还不需要类属性，所有的属性均应该是实例属性
 
 class Manager:
     def __init__(self, max_parallel = MAXIMUM_PARALLEL, monitor_gap = MONITOR_GAP):
@@ -34,34 +41,145 @@ class Manager:
         self.monitor_gap = monitor_gap
         self.create_working_directory()
         self.buffer = Queue()
-
+        self._is_profiling = False
         # create server ready to recv data
         self.run_msg_server()
 
-    current_map = pd.DataFrame()
-    # A dictionary for global job information
-    job_info_dict = {}
+        self.current_map = pd.DataFrame()
+        self.job_info_dict = {}
 
     # create working directory
     def create_working_directory(self):
         managerOperations.create_working_directory()
 
-    # Network Operations
-    def create_msg_client(self, address, port):
-        """Create a message client by client for reporting training throughput/speed.
+#### online profiling part code
+#
+#
 
-        Args:
-            func (func pointer): Client need to offer a function to get the real time training speed
-        """
-        return MSGOperations().create_msg_client(address, port)
+    def profiler_event_come(self):
+        if self._is_profiling_needed:
+            self._is_profiling = True #start profile
+            self.profiling_process()
+            self._is_profiling = False # end profile
+        else:
+            print("No profiling is needed")
 
-    def create_msg_server(self): # pass dynamic update data function into 
-        """Create a message server for receive throughput report by client
+    def _is_profiling_resources_enough(self):
+        # if we need to completely stop at least one job then we should reject the profiling
+        # This means we should guarantee all job at least have one node to use
+        if len(sys_admin.get_cluster_nodes()) - len(self.job_info_dict) < PROFILE_RESOURCES_NEEDED:
+            return False
+        return True
 
-        Args:
-            func (function pointer): a function for deciding when to trigger update job data
-        """
-        managerOperations.create_msg_server()
+    def _is_jobs_lack_cost_or_scale_info(self):
+        for Guid in self.job_info_dict.keys():
+            jobdetail = self.job_info_dict[Guid]
+            # First check whether cost info needed
+            if not jobdetail.resUp[1] and jobdetail.resDown[1]:
+                return True
+
+            # Check whether scale info needed
+            N_num_list = list(range(1, PROFILE_RESOURCES_NEEDED + 1))
+            if not set(N_num_list) < set(jobdetail.N): # [1,2,3,4] is not the subset of N means lacking some scale info
+                return True
+
+            # Check whether the scale info is confident(updated or not) 
+            # User need to specify whether they are confident to the scalability
+            for num in N_num_list:
+                if jobdetail.O[num][1] == False:
+                    return True
+        return False
+
+    def _is_profiling_needed(self):
+        is_profile = False
+        if self._is_profiling_resources_enough() and self._is_jobs_lack_cost_or_scale_info():
+            is_profile = True
+        return is_profile
+
+    def profiling_process(self):
+        
+        operation_map = self.current_map.copy()
+
+        for jobname in self.job_info_dict.keys(): # check each job one by one
+            jobdetail = self.job_info_dict[jobname]
+
+            # Find out the lack scales
+            lacking_scale = []
+            N_num_list = list(range(1, PROFILE_RESOURCES_NEEDED + 1))
+
+            for num in N_num_list:
+                if num not in jobdetail.N or jobdetail.O[num][1] == False:
+                    lacking_scale.append(num) # get all needed scales
+
+            if len(lacking_scale) > 0: # 
+                lacking_scale.sort(reverse=True)
+                for scale in lacking_scale:
+                    # Start scale profiling the lacking scales
+                    
+                    # 1. Check whether we have enough idle nodes
+                    idle_nodes = []
+                    nodes = self.current_map.columns.tolist()
+                    for node in nodes:
+                        if self.current_map[node].sum() == 0:
+                            idle_nodes.append(node)
+                    
+                    if len(idle_nodes) < lacking_scale[0]:
+                        # means we do not have enough nodes 
+                        # need to prempt nodes from other jobs
+                        prempt_num = lacking_scale[0] - len(idle_nodes)
+
+                        while(prempt_num > 0):
+                            running_jobs = self.current_map.index.tolist()
+                            for job in running_jobs:
+                                if self.current_map[self.current_map[job] == job].sum(axis=1): # sum for job line
+                                    # find the 2nd none 0 nodes and add to pool
+                                    idx = 0
+                                    first_occur = True
+                                    for value in self.current_map.loc[job].values:
+                                        if value == 1:
+                                            if first_occur == True:
+                                                first_occur = False
+                                                continue
+                                            else:
+                                                prempt_node = nodes[idx] # get the prempt node name
+                                                operation_map.iloc[running_jobs.index(job),idx] = 0 # fix the operation map corresponding cell to 1
+                                                prempt_num -= 1
+                                                idle_nodes.append(prempt_node)
+                    else:
+                        # for the usage of idle nodes
+                        for node in idle_nodes:
+                            operation_map.iloc[running_jobs.index(jobname), nodes.index(node)] == 1 # change profiling job to the target
+
+
+                    # Here we assume that adjust job function could handle diff map changes smoothly for now
+                    # No jobs come and leave, no nodes come and leave
+                    managerOperations.adjust_jobs_and_nodes_by_maps_diff(new_map= operation_map, old_map= self.current_map, job_info_dict=self.job_info_dict)
+
+                    self.current_map = operation_map
+                    lacking_scale.remove(lacking_scale[0])
+
+            else: # No scale lacking so go to check the costup and costdw
+                if not jobdetail.resUp[1] and jobdetail.resDown[1]: # check is cost info needed
+                    if jobdetail.resUp[1] == True:
+                       print("cost up is needed")
+                       # add one node for current job on frame
+                       managerOperations.adjust_jobs_and_nodes_by_maps_diff(new_map= , old_map= , job_info_dict=)
+
+                    if jobdetail.resDw[1] == True:
+                       print("cost dw is needed")
+                       # remove one node for current job on frame
+                       managerOperations.adjust_jobs_and_nodes_by_maps_diff(new_map= , old_map= , job_info_dict=)
+
+                # TODO
+                # The remainder work here is 
+                # * Double check the mark of whether cost or scale changed flag 
+                # * work on the pandas dataframe manipulation part
+                # * 理顺逻辑 大概复盘 然后commit change
+                # * 之后进入主分支开始debug costup 和costdw
+
+#
+#
+#### online profiling part code
 
     # life cycle functions
     def manager_start(self):
@@ -72,14 +190,14 @@ class Manager:
         if utils.get_job_queue_len() == 0:
             return
         
-        # fetch job from DB
+        # fetch MAXIMUM_PARALLEL jobs from DB if there are enough
         starting_jobs_num = min(MAXIMUM_PARALLEL, utils.get_job_queue_len())
         for i in range(starting_jobs_num):
             job_string = utils.get_a_job_from_DB()
             jobdetail = utils.parser_job_string_2_job_item(job_string)
             self.job_info_dict[jobdetail.GUID] = jobdetail
         
-        # build inital map
+        # build inital empty map
         jobnames = self.job_info_dict.keys()
         data = np.zeros((len(jobnames), len(sys_nodes)), dtype=int) # initial fake data
         initialMap = pd.DataFrame(data=data, index=jobnames, columns=sys_nodes)
@@ -90,15 +208,14 @@ class Manager:
         tmpGRB, new_data, tmpRate, tmpCost = re_allocate(cmap=initialMap, jmin=mins, jmax=maxs,
                                                             Ns=Ns,Os=Os, Tfwd=10, res_up=res_ups, res_dw = res_dws, 
                                                             time_limit=10)
-        print(new_data)
 
         new_map = pd.DataFrame(data=new_data, index=jobnames, columns=sys_nodes)
 
-        managerOperations.adjust_nodes_by_map(new_map=new_map, old_map=initialMap, job_info_dict = self.job_info_dict)
+        managerOperations.adjust_jobs_and_nodes_by_maps_diff(new_map=new_map, old_map=initialMap, job_info_dict = self.job_info_dict)
         self.current_map = new_map
-        
+
         print("=======================")
-        print("===manager start end===")
+        print("===  manager start  ===")
         print("=======================")
 
     def scheduler_job_change(self, GUIDs):
@@ -155,7 +272,7 @@ class Manager:
 
         new_map = pd.DataFrame(data=new_data, index=self.current_map.index, columns=self.current_map.columns)
 
-        managerOperations.adjust_nodes_by_map(new_map, self.current_map, self.job_info_dict)
+        managerOperations.adjust_jobs_and_nodes_by_maps_diff(new_map, self.current_map, self.job_info_dict)
 
         # update current_map
         self.current_map = new_map
@@ -164,7 +281,7 @@ class Manager:
         print("After re-allocation jobs get the new map")
         print(self.current_map)
 
-    def scheduler_nodes_change(self, flag, nodes): 
+    def scheduler_nodes_change(self, node_action, nodes): 
         print("node change called")
 
         # Event driven update data here
@@ -184,7 +301,55 @@ class Manager:
         print("Ns Os res_ups res_dw")
         print(Ns, Os, res_ups, res_dws)
 
-        if flag == JobNodeStatus.NODEIN:
+        if node_action == GlobalEventsType.NODEIN:
+            ###WORKING####
+            #  When node in we need to determine how to use the free nodes
+            
+            # TODO: A function determine whether we need to go to information collection process
+            
+            # if user_say_yes and we_found_we_need :
+            # then go to information collection process
+            
+            # determin rules:
+            # 1. user say yes
+            # 2. All cost_up function and cost_dw information
+            # 3. low priority +1 +2 scalability
+
+            # Our contributions here
+            # We will collect as much as possible information before the MIP process
+            # 
+
+            # profilers
+
+            for node in nodes:
+                for job in self.job_info_dict:
+                    item = self.job_info_dict[job]
+                    if item.resUp[1] == False:
+                        # We found that we need go to the information collect pipeline
+                        # 
+
+                        # give the node to this job and break
+                        new_map = self.current_map.insert(self.current_map.shape[1], node, 0) # dataframe add one new column and corresponding value to 1 
+                        # TODO: corresponding value 1
+                        # give the node to this job and break
+                        managerOperations.adjust_jobs_and_nodes_by_maps_diff(new_map, old_map, self.job_info_dict)
+
+                        # TODO: 
+                        # 1. double check if the value will be caught by the update function
+                        # 2. might need a new process here
+                        self.update_job_data_on_events(self.buffer, event_type= "node event")
+                        
+                        # release the node and update information
+                        tmp_map = self.current_map.drop(labels=node, axis=1) # dataframe delete one column
+                        managerOperations.adjust_jobs_and_nodes_by_maps_diff(new_map, old_map, self.job_info_dict)
+                        self.update_job_data_on_events(self.buffer, event_type= "node event")
+                        break
+            
+            # profiling pipeline done
+            # release the node done
+            # going to the normal MIP process and run
+
+            ####WORKING###
             print("node in :", nodes)
             print("old map", self.current_map)
             for node in nodes:
@@ -203,7 +368,7 @@ class Manager:
             new_map = pd.DataFrame(data=new_data, index=tmp_map.index, columns=tmp_map.columns)
             print("new map", new_map)
 
-        managerOperations.adjust_nodes_by_map(new_map, old_map, self.job_info_dict)
+        managerOperations.adjust_jobs_and_nodes_by_maps_diff(new_map, old_map, self.job_info_dict)
 
         # update current_map
         self.current_map = new_map
@@ -407,10 +572,7 @@ class Manager:
                 flag = False
         return flag
 
-    # node come and leave
-    def events_launcher(self):
-        self.manager_start()
-
+    def events_running_process(self):
         # create events source
         cluster_nodes = sys_admin.get_cluster_nodes()
         trace = trace_generator.synthetic_trace(nodes=cluster_nodes, nf=20000)
@@ -434,8 +596,8 @@ class Manager:
             
             passing_time = time.time() - start_time
 
-            coming_nodes = [] # coming nodes in one time check
-            leaving_nodes = [] # leaving nodes in one time check
+            coming_nodes = [] # coming nodes in one time check period
+            leaving_nodes = [] # leaving nodes in one time check period
 
             for node in cluster_nodes:
                 timestamps_tuple = trace[node] # list of tuple for node
@@ -454,10 +616,18 @@ class Manager:
             
             # when node counter == 0 that is the start, just skip the start phase
             if coming_nodes and self.is_first_round(counters) == False:
-                self.scheduler_nodes_change(JobNodeStatus.NODEIN, coming_nodes)
+                self.scheduler_nodes_change(GlobalEventsType.NODEIN, coming_nodes)
 
             if leaving_nodes:
-                self.scheduler_nodes_change(JobNodeStatus.NODEOUT, leaving_nodes)
+                self.scheduler_nodes_change(GlobalEventsType.NODEOUT, leaving_nodes)
+
+    # node come and leave
+    def start_running(self):
+        # inital launching
+        self.manager_start()
+
+        # events running
+        self.events_running_process()
 
 def main():
 
@@ -466,7 +636,7 @@ def main():
     m = Manager()
 
     # 2. start jobs and run as events come
-    p_events = Thread(target=m.events_launcher)
+    p_events = Thread(target=m.start_running())
     p_events.start()
     
     # 3. process monitor job pid

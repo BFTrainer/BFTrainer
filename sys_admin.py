@@ -8,7 +8,7 @@ def get_cluster_nodes():
         list: a list of avaliable nodes
     """
     if utils.is_theta_cluster():
-        nodelist = ["thetagpu07","thetagpu08","thetagpu14","thetagpu15"]
+        nodelist = ["thetagpu14","thetagpu15","thetagpu20","thetagpu22"]
         #nodelist = ["thetagpu02","thetagpu03","thetagpu04","thetagpu06",
         #"thetagpu07","thetagpu08","thetagpu09","thetagpu10","thetagpu11",
         #"thetagpu14","thetagpu15","thetagpu16","thetagpu19","thetagpu20",

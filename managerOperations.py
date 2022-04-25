@@ -13,12 +13,6 @@ def create_working_directory():
     if not work_dir:
         os.mkdir(WORKING_DIR)
 
-def create_msg_client(address, port):
-    return MSGOperations().create_msg_client(address, port)
-
-def create_msg_server(): # pass dynamic update data function into 
-    MSGOperations().create_msg_server()
-
 def add_job(jobname, nodes, job_info_dict):
     print("Add job was called")
     print("jobname %s on nodes %s" %(jobname, nodes))
@@ -141,7 +135,7 @@ def del_nodes_for_job(jobname, nodes):
             for line in new_lines:
                 w.write(line)
 
-def adjust_nodes_by_map(new_map, old_map, job_info_dict):
+def adjust_jobs_and_nodes_by_maps_diff(new_map, old_map, job_info_dict):
     """Make adjustment by comparing two maps differences
 
     Args:
@@ -175,6 +169,14 @@ def adjust_nodes_by_map(new_map, old_map, job_info_dict):
 
     # for each job check node changes
     # Only jobs in both old and new(overlabppedJobs) have node level changes
+
+    # TODO:
+    # Previously we only consider the extra node coming
+    # Not considered that swich node between job
+    # For switching nodes between running jobs, you need to make sure the del node 
+    # happen first and then add node action.
+    # For this part here *extra care is needed*
+
     for job in overlappedJobs:
         old_nodes = old_job_nodes_dict[job]
         new_nodes = new_job_nodes_dict[job]
@@ -186,7 +188,7 @@ def adjust_nodes_by_map(new_map, old_map, job_info_dict):
             if job_info_dict[job].pid == -1 and len(old_nodes) == 0:
                 add_job(job, new_job_nodes_dict[job], job_info_dict)
                 continue
-            
+
             # job existed adjust nodes only
             intersectionNodes = utils.get_lists_overlap(old_nodes, new_nodes)
             addNodes =list(set(new_nodes) - set(intersectionNodes)) # node to be added
