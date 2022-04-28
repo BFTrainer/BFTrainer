@@ -46,23 +46,6 @@ class Manager:
     def create_working_directory(self):
         managerOperations.create_working_directory()
 
-    # Network Operations
-    def create_msg_client(self, address, port):
-        """Create a message client by client for reporting training throughput/speed.
-
-        Args:
-            func (func pointer): Client need to offer a function to get the real time training speed
-        """
-        return MSGOperations().create_msg_client(address, port)
-
-    def create_msg_server(self): # pass dynamic update data function into 
-        """Create a message server for receive throughput report by client
-
-        Args:
-            func (function pointer): a function for deciding when to trigger update job data
-        """
-        managerOperations.create_msg_server()
-
     # life cycle functions
     def manager_start(self):
         sys_nodes=sys_admin.get_cluster_nodes()
@@ -89,8 +72,7 @@ class Manager:
 
         tmpGRB, new_data, tmpRate, tmpCost = re_allocate(cmap=initialMap, jmin=mins, jmax=maxs,
                                                             Ns=Ns,Os=Os, Tfwd=10, res_up=res_ups, res_dw = res_dws, 
-                                                            time_limit=10)
-        print(new_data)
+                                                            time_limit=10,note="manager_start")
 
         new_map = pd.DataFrame(data=new_data, index=jobnames, columns=sys_nodes)
 
@@ -147,20 +129,16 @@ class Manager:
         mins, maxs, Ns, Os, res_ups, res_dws = utils.get_optimizer_parameters_by_job_dict(self.job_info_dict)
 
         tmpGRB, new_data, tmpRate, tmpCost = re_allocate(cmap=self.current_map, jmin=mins, jmax=maxs,
-                                Ns=Ns,Os=Os, Tfwd=10, res_up=res_ups, res_dw = res_dws, time_limit=10)
+                                Ns=Ns,Os=Os, Tfwd=10, res_up=res_ups, res_dw = res_dws, time_limit=10, note="job_change_event")
 
         new_map = pd.DataFrame(data=new_data, index=self.current_map.index, columns=self.current_map.columns)
 
         managerOperations.adjust_nodes_by_map(new_map, self.current_map, self.job_info_dict)
 
-        # update buffer info to job_info_dict
-
-        # update current_map
         self.current_map = new_map
-        
         self.update_job_data_on_events(self.buffer, event_type="job event")
 
-    def scheduler_nodes_change(self, flag, nodes): 
+    def scheduler_nodes_change(self, flag, nodes, passing_time):
         print("node change called")
 
         # validate nodes name before operations 
@@ -181,7 +159,7 @@ class Manager:
             for node in nodes:
                self.current_map.insert(self.current_map.shape[1], node, 0) # dataframe add one new column
             tmpGRB, new_data, tmpRate, tmpCost = re_allocate(cmap=self.current_map, jmin=mins, jmax=maxs,
-                                                                Ns=Ns,Os=Os, Tfwd=10, res_up=res_ups, res_dw = res_dws, time_limit=10)
+                                                                Ns=Ns,Os=Os, Tfwd=10, res_up=res_ups, res_dw = res_dws, time_limit=10, note="node_change_nodein:" + passing_time)
             new_map = pd.DataFrame(data=new_data, index=self.current_map.index, columns=self.current_map.columns)
         else:
             print("node leave ", nodes)
@@ -190,17 +168,15 @@ class Manager:
                 tmp_map = self.current_map.drop(labels=node, axis=1) # dataframe delete one column
 
             tmpGRB, new_data, tmpRate, tmpCost = re_allocate(cmap=tmp_map, jmin=mins, jmax=maxs,
-                                                Ns=Ns,Os=Os, Tfwd=10, res_up=res_ups, res_dw = res_dws, time_limit=10)
+                                                Ns=Ns,Os=Os, Tfwd=10, res_up=res_ups, res_dw = res_dws, time_limit=10, note= "node_change_nodeout:" + passing_time)
             new_map = pd.DataFrame(data=new_data, index=tmp_map.index, columns=tmp_map.columns)
             print("new map", new_map)
 
         managerOperations.adjust_nodes_by_map(new_map, old_map, self.job_info_dict)
 
-        # update current_map
         self.current_map = new_map
-
+        
         self.update_job_data_on_events(self.buffer, event_type= "node event")
-
 
     # for future usage
     def _terminate_manager(self):
@@ -321,7 +297,8 @@ class Manager:
     def _cal_res_up_res_dw(self, job_items):
         res_up, res_dw = None, None
         if len(job_items) > 2:
-            print("update res_up and res_dw")
+            #print("update res_up and res_dw")
+            print('\033[1;31;40m%s\033[0m' % 'update res_up and res_dw')
 
             for i in range(len(job_items)-1,-1,-1): # reverse order find rank difference
                 
@@ -338,13 +315,13 @@ class Manager:
                     print("==resdw==", res_dw)
         return res_up, res_dw
 
-
     def update_job_data_on_events(self, buffer, event_type):
         ''' job change or node change trigger updating data for re-allocation'''
         if len(buffer) == 0:
-            print("No valid information and skip update process")
+            #print("No valid information and skip update process")
+            print('\033[1;31;40m%s\033[0m' % 'No valid information and skip update process')
             return
-        
+            
         group_dict = self._get_group_dict(buffer)
 
         if len(group_dict) == 0:
@@ -398,9 +375,7 @@ class Manager:
         return flag
 
     # node come and leave
-    def events_launcher(self):
-        self.manager_start()
-
+    def events_simulator(self):
         # create events source
         cluster_nodes = sys_admin.get_cluster_nodes()
         trace = trace_generator.synthetic_trace(nodes=cluster_nodes, nf=20000)
@@ -432,37 +407,37 @@ class Manager:
                 current_time_tuple = timestamps_tuple[counters[node]]
 
                 if passing_time > current_time_tuple[0] and flags[node] == False:
-                    print("node: " + node + " in") # trigger node in event
+                    print("node: " + node + " in at time:" + str(passing_time)) # trigger node in event
                     coming_nodes.append(node)
                     flags[node] = True
 
                 if passing_time > current_time_tuple[1] and flags[node] == True:
-                    print("node: " + node + " leave") # trigger node leave event
+                    print("node: " + node + " leave at time:" + str(passing_time)) # trigger node leave event
                     leaving_nodes.append(node)
                     flags[node] = False
                     counters[node] = counters[node] + 1
             
             # when node counter == 0 that is the start, just skip the start phase
             if coming_nodes and self.is_first_round(counters) == False:
-                self.scheduler_nodes_change(JobNodeStatus.NODEIN, coming_nodes)
+                self.scheduler_nodes_change(JobNodeStatus.NODEIN, coming_nodes, str(passing_time) )
 
             if leaving_nodes:
-                self.scheduler_nodes_change(JobNodeStatus.NODEOUT, leaving_nodes)
+                self.scheduler_nodes_change(JobNodeStatus.NODEOUT, leaving_nodes, str(passing_time))
 
 def main():
 
-    # create manager
-    # basic settings and msg server
+    # 1. Create manager
+    # run msg server and initial start jobs
     m = Manager()
+    m.manager_start()
 
-    # 2. start jobs and run as events come
     # Run events simulator
-    p_events = Thread(target=m.events_launcher)
+    p_events = Thread(target=m.events_simulator)
     p_events.start()
     
     # 3. process monitor job pid
-    p_monitor = Thread(target=m.monitor_hvd_processes)
-    p_monitor.start()
+    #p_monitor = Thread(target=m.monitor_hvd_processes)
+    #p_monitor.start()
 
     # for local testing purpose
     

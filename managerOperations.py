@@ -147,8 +147,6 @@ def adjust_nodes_by_map(new_map, old_map, job_info_dict):
     Args:
         newMap (dataframe): the input dataframe from optimizer
     """
-    print("adjust_nodes_by_map(newmap, oldmap, jobInfoDict) called")
-
     # map to dict
     old_job_nodes_dict = utils.get_job_nodes_mapping_from(old_map)
     new_job_nodes_dict = utils.get_job_nodes_mapping_from(new_map)
@@ -178,7 +176,7 @@ def adjust_nodes_by_map(new_map, old_map, job_info_dict):
     for job in overlappedJobs:
         old_nodes = old_job_nodes_dict[job]
         new_nodes = new_job_nodes_dict[job]
-        
+
         # check diff
         if set(old_nodes) != set(new_nodes):
             # pid = -1 means this job never launched before

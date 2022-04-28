@@ -23,7 +23,7 @@ class MSGOperations:
                 data, addr = s.recvfrom(1024)
                 address_id = 'Address:%s ' % addr[0]
                 msg = address_id + str(data, encoding = "utf-8")
-                print(msg)
+                #print(msg)
 
                 if addr[0] in self.buffer:
                     tmp_que = self.buffer[addr[0]]
