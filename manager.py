@@ -143,10 +143,6 @@ class Manager:
         print("After fetching jobs get the map for adjustment")
         print(self.current_map)
 
-        # update buffer info to job_info_dict
-        # 
-        self.update_job_data_on_events(self.buffer, event_type="job event")
-        
         # get parameters with latest `job_info_dict`
         mins, maxs, Ns, Os, res_ups, res_dws = utils.get_optimizer_parameters_by_job_dict(self.job_info_dict)
 
@@ -157,20 +153,15 @@ class Manager:
 
         managerOperations.adjust_nodes_by_map(new_map, self.current_map, self.job_info_dict)
 
+        # update buffer info to job_info_dict
+
         # update current_map
         self.current_map = new_map
         
-        # print current map after allocation
-        print("After re-allocation jobs get the new map")
-        print(self.current_map)
+        self.update_job_data_on_events(self.buffer, event_type="job event")
 
     def scheduler_nodes_change(self, flag, nodes): 
         print("node change called")
-
-        # Event driven update data here
-        # Use buffer data and get ns os and res_up and res_dw
-        # 
-        self.update_job_data_on_events(self.buffer, event_type= "node event")
 
         # validate nodes name before operations 
         if sys_admin.is_nodes_belong_to_avaliable_nodes(nodes) == False:
@@ -207,6 +198,9 @@ class Manager:
 
         # update current_map
         self.current_map = new_map
+
+        self.update_job_data_on_events(self.buffer, event_type= "node event")
+
 
     # for future usage
     def _terminate_manager(self):
@@ -462,6 +456,7 @@ def main():
     m = Manager()
 
     # 2. start jobs and run as events come
+    # Run events simulator
     p_events = Thread(target=m.events_launcher)
     p_events.start()
     
@@ -471,7 +466,5 @@ def main():
 
     # for local testing purpose
     
-
-
 if __name__ == "__main__":
     main()
