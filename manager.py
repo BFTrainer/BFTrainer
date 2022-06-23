@@ -1,7 +1,6 @@
 from itertools import groupby
 from queue import Queue
 import time
-import sys
 
 import pandas as pd
 from enum import Enum
@@ -16,6 +15,8 @@ from msgOperations import MSGOperations
 import sys_admin
 from threading import Thread
 import trace_generator
+
+import pickle
 
 MAXIMUM_PARALLEL = 2 # 
 
@@ -318,8 +319,7 @@ class Manager:
     def update_job_data_on_events(self, buffer, event_type):
         ''' job change or node change trigger updating data for re-allocation'''
         if len(buffer) == 0:
-            #print("No valid information and skip update process")
-            print('\033[1;31;40m%s\033[0m' % 'No valid information and skip update process')
+            print('\033[1;31;40m%s\033[0m' % 'Buffer len is 0, no valid information and skip update process')
             return
             
         group_dict = self._get_group_dict(buffer)
@@ -328,6 +328,11 @@ class Manager:
             print("Jobs in current_map has no any training msg in buffer, probably means all jobs are new fetched(not started yet)," \
             " do not need to use historial information to do the update, so return the update function here")
             return
+
+        with open('buffer.debug', 'wb') as buffer_dubeg_file:
+            pickle.dump(buffer, buffer_dubeg_file)
+
+        print(4/0) # crash it here!! 
 
         # for each job get the cost and thrpt info
         for jobname in group_dict:

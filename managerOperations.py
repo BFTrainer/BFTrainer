@@ -36,7 +36,7 @@ def add_job(jobname, nodes, job_info_dict):
     myenv = os.environ
     myenv["MKL_SERVICE_FORCE_INTEL"] = "1"
 
-    # 2. Launch new job and get process id
+    # 2. Launch new job and get process id 
     with open("stdout.txt","w") as out, open("stderr.txt","w") as err:
         print("command", command)
         p = Popen(command, shell=True, env=myenv, stdout=out, stderr=err)
@@ -99,7 +99,7 @@ def del_discover_files(jobname):
 # Node changes
 def add_nodes_for_job(jobname, nodes):
     print("add nodes for job %s called" % jobname)
-    print("added nodes: ", nodes)    
+    print("added nodes: ", nodes)
 
     # discover host file
     discover_file_path = os.path.join(WORKING_DIR, "discover_host_" + jobname + ".sh")
@@ -129,12 +129,18 @@ def del_nodes_for_job(jobname, nodes):
         lines = []
         with open(discover_file_path, 'r') as r:
             lines = r.readlines()
-        
+
+        print('\033[1;31;40m%s\033[0m' % 'Delete node called before file content')
+        print(lines)
+
         # filter out deleted nodes
         new_lines = []
         for line in lines:
             if is_line_contain_delete_nodes(line, nodes) == False:
                 new_lines.append(line)
+
+        print('\033[1;31;40m%s\033[0m' % 'Delete node called after file content')
+        print(new_lines)
 
         # write back
         with open(discover_file_path, 'w') as w:
