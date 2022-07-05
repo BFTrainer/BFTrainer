@@ -32,9 +32,6 @@ class GlobalEventsType(Enum):
     NODEOUT=3
     PROFILING=4
 
-# TODO: Delete the following comments
-# 这里边目前还不需要类属性，所有的属性均应该是实例属性
-
 class Manager:
     def __init__(self, max_parallel = MAXIMUM_PARALLEL, monitor_gap = MONITOR_GAP):
         self.max_parallel = max_parallel
@@ -42,6 +39,7 @@ class Manager:
         self.create_working_directory()
         self.buffer = Queue()
         self._is_profiling = False
+
         # create server ready to recv data
         self.run_msg_server()
 
@@ -53,16 +51,34 @@ class Manager:
         managerOperations.create_working_directory()
 
 #### online profiling part code
+# Note:
+# We need to guarantee that we have enough valid information collected from the profiling process
+# 
+# 
+# Question:
+#   1. For the profiling event, do we need to mantain a queue here?
+#   
+#   2. The profile event we profile for one job or we profile for current all jobs(I think profile event come with the one new job? or once the profile evnet come 
+#   we need to profile for all the running jobs?
+#   
+# TODO:
+#   1. maintian a profile event queue
+#   2. I want to do a system API test, that give different pandas dataframe and the node changes as expected, and also need to measure how long time the adjustment process takes
+#   3. 
 #
-#
+# online profiling steps
+#   1. profile event come from system
+#   2. check can we start the profiling process
+#   3. 
 
+    # Profiling start here
     def profiler_event_come(self):
         if self._is_profiling_needed:
-            self._is_profiling = True #start profile
-            self.profiling_process()
+            self._is_profiling = True # Start profile
+            self.profiling_process() # should catch exception, if exception happen set the profiling to False
             self._is_profiling = False # end profile
         else:
-            print("No profiling is needed")
+            print("No profiling is needed") # TODO: mantian a queue here? if cannot profile now , we let use decide wait or do not wait
 
     def _is_profiling_resources_enough(self):
         # if we need to completely stop at least one job then we should reject the profiling
@@ -91,8 +107,8 @@ class Manager:
         return False
 
     def _is_profiling_needed(self):
-        is_profile = False
-        if self._is_profiling_resources_enough() and self._is_jobs_lack_cost_or_scale_info():
+        is_profile = False # check if there are other jobs are profiling
+        if self._is_profiling_resources_enough() and self._is_jobs_lack_cost_or_scale_info(): # check resource and check job missing information
             is_profile = True
         return is_profile
 
@@ -125,9 +141,10 @@ class Manager:
                     
                     if len(idle_nodes) < lacking_scale[0]:
                         # means we do not have enough nodes 
-                        # need to prempt nodes from other jobs
+                        # need to prempt nodes from other jobs (This part should take extra care since it might have some side effect to other jobs)
                         prempt_num = lacking_scale[0] - len(idle_nodes)
-
+                        
+                        # TODO: The code block here for prempt nodes
                         while(prempt_num > 0):
                             running_jobs = self.current_map.index.tolist()
                             for job in running_jobs:
@@ -146,13 +163,18 @@ class Manager:
                                                 prempt_num -= 1
                                                 idle_nodes.append(prempt_node)
                     else:
-                        # for the usage of idle nodes
+                        # Enough idle nodes detected and put it into profiling job directly
                         for node in idle_nodes:
                             operation_map.iloc[running_jobs.index(jobname), nodes.index(node)] == 1 # change profiling job to the target
 
-
                     # Here we assume that adjust job function could handle diff map changes smoothly for now
                     # No jobs come and leave, no nodes come and leave
+                    
+                    # There is one problem here, we need to make the program run for a while and then make sure we collected enough valid data and then goes to 
+                    # next step
+                    # 在这里要注意，启动一个job并且跑起来是需要时间的，根据模型大小不同，这个时间也是不同的。
+                    # 所以在这里，介入profile event的时候，是进行profile一个job比较合适的
+                    # For now we could let it wait for 20 seconds
                     managerOperations.adjust_jobs_and_nodes_by_maps_diff(new_map= operation_map, old_map= self.current_map, job_info_dict=self.job_info_dict)
 
                     self.current_map = operation_map
@@ -163,6 +185,8 @@ class Manager:
                     if jobdetail.resUp[1] == True:
                        print("cost up is needed")
                        # add one node for current job on frame
+                       # TODO: if idle node is enough get it from idle node
+                       # if no then prompt it from running job then return it back
                        managerOperations.adjust_jobs_and_nodes_by_maps_diff(new_map= , old_map= , job_info_dict=)
 
                     if jobdetail.resDw[1] == True:
@@ -170,12 +194,15 @@ class Manager:
                        # remove one node for current job on frame
                        managerOperations.adjust_jobs_and_nodes_by_maps_diff(new_map= , old_map= , job_info_dict=)
 
+            
                 # TODO
                 # The remainder work here is 
                 # * Double check the mark of whether cost or scale changed flag 
                 # * work on the pandas dataframe manipulation part
-                # * 理顺逻辑 大概复盘 然后commit change
-                # * 之后进入主分支开始debug costup 和costdw
+        
+        # After the profiling process finished we need to return to the initial status
+        # 
+        #  
 
 #
 #
