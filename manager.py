@@ -137,7 +137,6 @@ class Manager:
         managerOperations.adjust_nodes_by_map(new_map, self.current_map, self.job_info_dict)
 
         self.current_map = new_map
-        self.update_job_data_on_events(self.buffer, event_type="job event")
 
     def scheduler_nodes_change(self, flag, nodes, passing_time):
         print("node change called")
@@ -176,8 +175,6 @@ class Manager:
         managerOperations.adjust_nodes_by_map(new_map, old_map, self.job_info_dict)
 
         self.current_map = new_map
-        
-        self.update_job_data_on_events(self.buffer, event_type= "node event")
 
     # for future usage
     def _terminate_manager(self):
@@ -316,6 +313,7 @@ class Manager:
                     print("==resdw==", res_dw)
         return res_up, res_dw
 
+    # TODO: Change this function to time dirven instead of event driven
     def update_job_data_on_events(self, buffer, event_type):
         ''' job change or node change trigger updating data for re-allocation'''
         if len(buffer) == 0:
@@ -329,10 +327,9 @@ class Manager:
             " do not need to use historial information to do the update, so return the update function here")
             return
 
+        # dumb this is for debugging
         with open('buffer.debug', 'wb') as buffer_dubeg_file:
             pickle.dump(buffer, buffer_dubeg_file)
-
-        print(4/0) # crash it here!! 
 
         # for each job get the cost and thrpt info
         for jobname in group_dict:
@@ -340,7 +337,8 @@ class Manager:
             
             # we will assume the id is right for now
             # job_items.sort(key=lambda x: x.id)
-
+            
+            # TODO: Debug here to check res up and res dw
             res_up, res_dw = self._cal_res_up_res_dw(job_items)
 
             # TODO: the cal throughput part need to change(use latest throughput)
@@ -379,8 +377,9 @@ class Manager:
                 flag = False
         return flag
 
-    # node come and leave
     def events_simulator(self):
+        """Simulate cluster nodes come and leave
+        """
         # create events source
         cluster_nodes = sys_admin.get_cluster_nodes()
         trace = trace_generator.synthetic_trace(nodes=cluster_nodes, nf=20000)
@@ -398,7 +397,7 @@ class Manager:
 
         start_time = time.time()
 
-        # events tick driver
+        # Event loop
         while(True):
             time.sleep(0.1) # check each 0.1 second(could change)
             
