@@ -34,7 +34,7 @@ class Manager:
         self.max_parallel = max_parallel
         self.monitor_gap = monitor_gap
         self.create_working_directory()
-        self.buffer = {}
+        self.scale_info_dict = {}
 
         # create server ready to recv data
         self.run_msg_server()
@@ -85,7 +85,7 @@ class Manager:
         print("=======================")
 
     def scheduler_job_change(self, GUIDs):
-                
+
         # 1. Detect job leave
         # drop the job from map and job_dict
         for GUID in GUIDs:
@@ -127,6 +127,7 @@ class Manager:
         print(self.current_map)
 
         # get parameters with latest `job_info_dict`
+        self.update_job_scale_data()
         mins, maxs, Ns, Os, res_ups, res_dws = utils.get_optimizer_parameters_by_job_dict(self.job_info_dict)
 
         tmpGRB, new_data, tmpRate, tmpCost = re_allocate(cmap=self.current_map, jmin=mins, jmax=maxs,
@@ -146,6 +147,7 @@ class Manager:
             print("error: nodes out of avaliable nodes range")
             return
 
+        self.update_job_scale_data()
         # drop or add columns for nodes in cmap
         old_map = self.current_map
         mins, maxs, Ns, Os, res_ups, res_dws = utils.get_optimizer_parameters_by_job_dict(self.job_info_dict)
@@ -267,106 +269,34 @@ class Manager:
                 job_item.N = res_N
                 job_item.O = res_O
         
-        if res_up != None:
+        if res_up != None and res_up != 0:
             job_item.res_up = res_up
 
-        if res_down != None:
+        if res_down != None and res_down != 0:
             job_item.res_down = res_down
 
-    def _get_group_dict(self, buffer):
-        # get job msg_item dict
-        group_dict = {}
-        for key in buffer:
-            hostname = utils.get_host_name_by_address(key)
-            jobname = utils.get_jobname_by_hostname(hostname, self.current_map)
-
-            if jobname == "":
-                continue
-            
-            msg_list = buffer[key]
-            msg_items = []
-            for msg in msg_list:
-                msg_item = utils.parser_udp_message(msg)
-                msg_items.append(msg_item)
-            group_dict[jobname] = msg_items
-        
-        return group_dict
-
-    def _cal_res_up_res_dw(self, job_items):
-        res_up, res_dw = None, None
-        if len(job_items) > 2:
-            #print("update res_up and res_dw")
-            print('\033[1;31;40m%s\033[0m' % 'update res_up and res_dw')
-
-            for i in range(len(job_items)-1,-1,-1): # reverse order find rank difference
-                
-                if job_items[i].rank_size > job_items[i-1].rank_size and job_items[i-1].rank_size == job_items[i-2].rank_size:
-                    print("================ get the res_up cost ===================")
-                    res_up = (job_items[i].time - job_items[i-1].time) - (job_items[i-1].time - job_items[i-2].time)
-                    print("==resup==", res_up)
-
-                elif job_items[i].rank_size < job_items[i-1].rank_size and job_items[i-1].rank_size == job_items[i-2].rank_size:
-                    print("================ get the res_down cost =================")
-                    print(type(job_items[i].time))
-                    print(job_items[i].time)
-                    res_dw = (job_items[i].time - job_items[i-1].time) - (job_items[i-1].time - job_items[i-2].time)
-                    print("==resdw==", res_dw)
-        return res_up, res_dw
-
-    def update_job_data(self, buffer, event_type):
+    def update_job_scale_data(self):
         ''' job change or node change trigger updating data for re-allocation'''
-        if len(buffer) == 0:
-            print('\033[1;31;40m%s\033[0m' % 'Buffer len is 0, no valid information and skip update process')
-            return
-            
-        group_dict = self._get_group_dict(buffer)
-
-        if len(group_dict) == 0:
-            print("Jobs in current_map has no any training msg in buffer, probably means all jobs are new fetched(not started yet)," \
-            " do not need to use historial information to do the update, so return the update function here")
+        if len(self.scale_info_dict) == 0:
             return
 
-        # dumb this is for debugging
-        with open('buffer.debug', 'wb') as buffer_dubeg_file:
-            pickle.dump(buffer, buffer_dubeg_file)
+        for jobname in self.job_info_dict.keys():
+            job_scale_info = self.scale_info_dict[jobname]
+            N = list(job_scale_info.rank_speed_dict.keys())
+            O = list(job_scale_info.rank_speed_dict.values())
+            res_up = job_scale_info.add_overhead
+            res_dw = job_scale_info.reduce_overhead
 
-        # for each job get the cost and thrpt info
-        for jobname in group_dict:
-            job_items = group_dict[jobname]
-            
-            # we will assume the id is right for now
-            # job_items.sort(key=lambda x: x.id)
-            
-            # TODO: Debug here to check res up and res dw
-            res_up, res_dw = self._cal_res_up_res_dw(job_items)
-
-            # TODO: the cal throughput part need to change(use latest throughput)
-            N = []
-            O = []
-            for key, group in groupby(job_items, lambda x: x.rank_size): # key: different rank size for job - group: items of this job with this ranksize
-                node_num = int(key)/NUM_OF_GPUs_PER_NODE
-                N.append(int(node_num))
-                group_list = list(group)
-                
-                thrputs = []
-                for i in range(0, len(group_list) - 1):
-                    msg_time_gap = float(group_list[i + 1].time) - float(group_list[i].time)
-                    thrput = float(group_list[i].credit) / msg_time_gap
-                    thrputs.append(thrput)
-                avg_thrput = thrputs[-1] # use the last thrput as the current thrput
-
-                O.append(avg_thrput)
-        
-        # Update collect info to JobInfoDict
-        self.update_scaling_and_cost_data_2_jobInfoDict(jobname=jobname, N=N, O=O, res_up=res_up, res_down=res_dw)
+            # Update collect info to JobInfoDict
+            self.update_scaling_and_cost_data_2_jobInfoDict(jobname=jobname, N=N, O=O, res_up=res_up, res_down=res_dw)
 
     def run_msg_server(self):
         # run server daemon
         print("run server and update data")
         mserver=MSGOperations()
-        self.buffer = mserver.buffer
+        self.scale_info_dict = mserver.scale_info_dict
 
-        p_server = Thread(target=mserver.create_msg_server) # keep updating buffer data
+        p_server = Thread(target=mserver.create_msg_server)
         p_server.start()
 
     def is_first_round(self, counters):
