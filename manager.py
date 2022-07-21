@@ -34,7 +34,7 @@ class Manager:
         self.max_parallel = max_parallel
         self.monitor_gap = monitor_gap
         self.create_working_directory()
-        self.buffer = Queue()
+        self.buffer = {}
 
         # create server ready to recv data
         self.run_msg_server()
@@ -313,8 +313,7 @@ class Manager:
                     print("==resdw==", res_dw)
         return res_up, res_dw
 
-    # TODO: Change this function to time dirven instead of event driven
-    def update_job_data_on_events(self, buffer, event_type):
+    def update_job_data(self, buffer, event_type):
         ''' job change or node change trigger updating data for re-allocation'''
         if len(buffer) == 0:
             print('\033[1;31;40m%s\033[0m' % 'Buffer len is 0, no valid information and skip update process')
