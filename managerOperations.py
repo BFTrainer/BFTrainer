@@ -20,7 +20,7 @@ def create_msg_server(): # pass dynamic update data function into
     MSGOperations().create_msg_server()
 
 def add_job(jobname, nodes, job_info_dict):
-    print("Add job was called")
+    utils.print_red("Add job was called")
     print("jobname %s on nodes %s" %(jobname, nodes))
     # if the job not being assigned node
     # just skip the process
@@ -71,7 +71,7 @@ def generate_command(discover_file_path, jobname, job_info_dict):
     return command
 
 def del_job(jobname, job_info_dict):
-    print("del job called")
+    utils.print_red("del job called")
     # 1. check the pid is running
     job_pid = job_info_dict[jobname].pid
     if job_pid == -1:
@@ -98,7 +98,7 @@ def del_discover_files(jobname):
 
 # Node changes
 def add_nodes_for_job(jobname, nodes):
-    print("add nodes for job %s called" % jobname)
+    utils.print_red("add nodes for job %s called" % jobname)
     print("added nodes: ", nodes)
 
     # discover host file
@@ -119,7 +119,7 @@ def is_line_contain_delete_nodes(line, nodes):
     return flag
 
 def del_nodes_for_job(jobname, nodes):
-    print("delete node for job %s called" % jobname)
+    utils.print_red("delete node for job %s called" % jobname)
     print("delete nodes: ", nodes)
 
     # del host from corresponding hostfile

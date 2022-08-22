@@ -17,15 +17,19 @@ class scale_info:
 class MSGOperations:
     def __init__(self) -> None:
         self.buffer = {}
-        self.scale_info_dict = {}
+        self.scale_info_dict = {} # keys:jobnames value:scale_info instance
 
-    def get_ranksize_from_msg_str(self, msg):
+    def get_jobid_and_ranksize_from_msg(self, msg):
         if len(msg) <= 0 or "rank_size:" not in msg:
             return
+
+        jobname_idx = msg.find("jobname:")
+        jobname_str = msg[jobname_idx + len("jobname:"):-1]
+        
         idx = msg.find("rank_size:")
         tail_str = msg[idx + len("rank_size:"):] # cut string from ranks size
         target_str = tail_str[0:tail_str.find(" ")] # cut string after num of rank size
-        return int(target_str)
+        return jobname_str, int(target_str)
 
     def _get_training_speed(self, last_udp, penul_udp):
         time_gap = last_udp.time - penul_udp.time
@@ -38,20 +42,19 @@ class MSGOperations:
         overhead = time_gap_on_rank_change - time_gap_before_rank_change
         return overhead
 
-    def update_scale_info_dict(self, address, msg):
+    def update_scale_info_dict(self, jobname, msg, file):
         """Update rescale info dict only when rank change"""
         
         # Here means the job is a new started job and no training information in the buffer that we could use to 
         # cal training speed and add reduce overhead, so there is no meaning to keep on
-        if address not in self.buffer:
+        if jobname not in self.buffer:
             return
         
-        msg_list =  self.buffer[address]
+        msg_list =  self.buffer[jobname]
         if len(msg_list) < 10: # we assume that first 10 mini steps are not very stable(so ignore the first 10 mini step)
             return
 
         msg_udp = utils.parser_udp_message(msg)
-        jobid = msg_udp.id
         
         last_two_msgs = msg_list[-2:]
         last_udp = utils.parser_udp_message(last_two_msgs[-1])
@@ -61,8 +64,8 @@ class MSGOperations:
         overhead = self._get_overhead(msg_udp, last_udp, penultimate_udp)
 
         # if scale info existed then update
-        if jobid in self.scale_info_dict:
-            job_scale_info  = self.scale_info_dict[jobid]
+        if jobname in self.scale_info_dict:
+            job_scale_info  = self.scale_info_dict[jobname]
             job_scale_info.rank_speed_dict[last_udp.rank_size] = training_speed
 
             if overhead > 0:
@@ -71,7 +74,7 @@ class MSGOperations:
                 else:
                     job_scale_info.reduce_overhead = overhead
         else: # if not then create a new info instance
-            job_scale_info = scale_info(jobid)
+            job_scale_info = scale_info(jobname)
             job_scale_info.rank_speed_dict[last_udp.rank_size] = training_speed
             
             if overhead > 0:
@@ -79,8 +82,10 @@ class MSGOperations:
                     job_scale_info.add_overhead = overhead
                 else:
                     job_scale_info.reduce_overhead = overhead
+            self.scale_info_dict[jobname] = job_scale_info
 
-            self.scale_info_dict[jobid] = job_scale_info
+        print(f"jobname is {jobname} and job_scale_info keys:{job_scale_info.rank_speed_dict.keys()} values {job_scale_info.rank_speed_dict.values()} job add overhead {job_scale_info.add_overhead} job reduce overhead {job_scale_info.reduce_overhead}")
+        file.write(f"jobname is {jobname} and job_scale_info keys:{job_scale_info.rank_speed_dict.keys()} values {job_scale_info.rank_speed_dict.values()} job add overhead {job_scale_info.add_overhead} job reduce overhead {job_scale_info.reduce_overhead}\n")
 
     # Sever - manager side
     def create_msg_server(self):
@@ -89,31 +94,40 @@ class MSGOperations:
             s.bind((ADDRESS, PORT))
             print("create udp server success")
             w = open("msg.log", "w")
-            
-            rank = 0
-            
+
+            # This is a temp way to detect the rank change method
+            job_current_rank_dict = {}
+
             while True:
                 data, addr = s.recvfrom(1024)
                 address_id = 'Address:%s ' % addr[0]
                 msg = address_id + str(data, encoding = "utf-8")
-                #print(msg)
-                current_rank = self.get_ranksize_from_msg_str(msg)
+                # print(msg)
+                jobname, current_rank = self.get_jobid_and_ranksize_from_msg(msg) 
+                
+                stored_rank = 0
+                # get old rank
+                if jobname in job_current_rank_dict:
+                    stored_rank = job_current_rank_dict[jobname]
 
-                if rank != current_rank:
-                    # rank change happen update the scale info dict
-                    self.update_scale_info_dict(addr[0], msg)
-                    rank = current_rank # update rank
+                if stored_rank != current_rank:
+                    w.write("Rank change triggered\n")
+                    print(f"stored rank: {stored_rank} current_rank: {current_rank}")
+                    self.update_scale_info_dict(jobname, msg, w)
+                    stored_rank = current_rank # update rank
+
+                    job_current_rank_dict[jobname] = stored_rank
 
                 # get the message buffer info
-                if addr[0] in self.buffer:
-                    tmp_que = self.buffer[addr[0]]
+                if jobname in self.buffer:
+                    tmp_que = self.buffer[jobname]
                     if len(tmp_que) >= 100:
                         tmp_que.pop(0)
                     tmp_que.append(msg)
                 else:
                     q = []
                     q.append(msg)
-                    self.buffer[addr[0]] = q
+                    self.buffer[jobname] = q
 
                 w.write(msg + '\n')
                 w.flush()

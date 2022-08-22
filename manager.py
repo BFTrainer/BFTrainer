@@ -148,7 +148,7 @@ class Manager:
         print("Ns Os res_ups res_dw")
         print(Ns, Os, res_ups, res_dws)
 
-        old_map = self.current_map.copy() # deep copy current map here
+        old_map = self.current_map.copy() # Deep copy current map here
 
         if flag == JobNodeStatus.NODEIN:
             print("node in :", nodes)
@@ -160,7 +160,7 @@ class Manager:
             new_map = pd.DataFrame(data=new_data, index=self.current_map.index, columns=self.current_map.columns)
         else:
             print("node leave ", nodes)
-            print("old map", self.current_map)
+            print("old map", self.current_map) 
             for node in nodes:
                 tmp_map = self.current_map.drop(labels=node, axis=1) # dataframe delete one column
 
@@ -171,6 +171,8 @@ class Manager:
         print("new map", new_map)
         managerOperations.adjust_nodes_by_map(new_map, old_map, self.job_info_dict)
         self.current_map = new_map
+
+        print("=======events node change end==========")
 
     # for future usage
     def _terminate_manager(self):
@@ -207,21 +209,23 @@ class Manager:
             print("============= %f : monitor hvd process report * foot ===============" % now)
     
     def merge_ordered_NO_2_itemNO(self, job_N, job_O, N, O):
+        # Here job_N job_O N and O are all list
         # Switch job_N and job_O to a dict
-        item_no_dict = {}
-        for i in range(len(job_N)):
-            item_no_dict[job_N[i]] = job_O[i]
 
-        # insert N and O to the tmp dict
-        # Key same will replace, otherwise will insert
+        rank_obj_tmp_dict = {}
+        for i in range(len(job_N)):
+            rank_obj_tmp_dict[job_N[i]] = job_O[i]
+
+        # insert N and O to the rank_obj_tmp_dict
+        # Key same will replace(update), otherwise(rank not existed) will insert
         for i in range(len(N)):
             print("insert key Ni", N[i])
             print("insert val Oi", O[i])
-            item_no_dict[N[i]] = O[i]
+            rank_obj_tmp_dict[N[i]] = O[i]
 
         # Sort the merged dict
         # TODO: no need to use OrderedDict
-        ordered_job_dict = OrderedDict(sorted(item_no_dict.items()))
+        ordered_job_dict = OrderedDict(sorted(rank_obj_tmp_dict.items()))
 
         # convert back to N and O (ordered)
         Ns = list(ordered_job_dict.keys())
@@ -270,15 +274,36 @@ class Manager:
         if res_down != None and res_down != 0:
             job_item.res_down = res_down
 
+    # TODO: Working here
     def update_job_scale_data_to_jobinfoDict(self):
         ''' job change or node change trigger updating data for re-allocation'''
-        job_scale_info = self.mserver.scale_info_dict
-        if len(job_scale_info) == 0:
-            return
+        
+        if len(self.mserver.buffer) == 0:
+            utils.print_colored_log("There is no any msg in buffer now", color="YELLOW")
+        else:
+            print(f"buffer keys is {self.mserver.buffer.keys()}")
 
-        for jobname in self.job_info_dict.keys():
-            N = list(job_scale_info.rank_speed_dict.keys())
+        job_scale_info_dict = self.mserver.scale_info_dict
+
+        print(f"mserver scale info dict keys {self.mserver.scale_info_dict.keys()}")
+
+        # Co-exist job in 
+        coexist_jobs_id = list(set(self.job_info_dict.keys()) & set(job_scale_info_dict.keys()))
+        
+        print(f"job info dict keys {self.job_info_dict.keys()}")
+        print(f"job scale info dict keys {job_scale_info_dict.keys()}")
+        print(f"Coexisted job ids {coexist_jobs_id}")
+
+        for jobname in coexist_jobs_id:
+            job_scale_info = job_scale_info_dict[jobname]
+            nodes_nums = [rank/NUM_OF_GPUs_PER_NODE for rank in job_scale_info.rank_speed_dict.keys()]
+            
+            print("==========Working here and Debug==========")
+            N = nodes_nums
+            print(f"N list is {N}")
+
             O = list(job_scale_info.rank_speed_dict.values())
+            print(f"O list is {O}")
             res_up = job_scale_info.add_overhead
             res_dw = job_scale_info.reduce_overhead
 

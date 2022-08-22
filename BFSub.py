@@ -1,7 +1,5 @@
 import argparse
-from manager import Manager
 import utils
-
 
 parser = argparse.ArgumentParser(description="User need to submit job informations")
 parser.add_argument('--min', type=int, required=True, help='min num of nodes')

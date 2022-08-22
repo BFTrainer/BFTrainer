@@ -3,13 +3,17 @@ import os
 import socket
 import DBOperations
 
+CSTART = '\033[1;31;40m'
+CEND = '\033[0m'
+
 class UDP_Msg:
-    def __init__(self, address, id, time, rank_size, credit):
+    def __init__(self, address, id, time, rank_size, credit, jobname):
         self.address = address
         self.id = id
         self.time = time
         self.rank_size = rank_size
         self.credit = credit
+        self.jobname = jobname
 
 def get_lists_overlap(nums1, nums2):
     nums1.sort()
@@ -131,8 +135,9 @@ def parser_udp_message(msg):
     time = float(items[2].split(":")[-1])
     rank_size = int(items[3].split(":")[-1])
     credit = float(items[4].split(":")[-1])
+    jobname = items[5].split(":")[-1][0:-1] # The last [0:-1] to remove the \n in the end of the string
 
-    return UDP_Msg(address, id, time, rank_size, credit)
+    return UDP_Msg(address, id, time, rank_size, credit, jobname)
 
 def working_dir():
     home = os.path.expanduser("~")
@@ -180,3 +185,20 @@ def get_a_job_from_DB():
         return DBOperations.get_Job_from_DBQueue(DB_path())
     else:
         return None
+
+def print_red(log_str):
+    print(f"{CSTART}{log_str}{CEND}")
+
+def print_colored_log(input, color = "RED"):
+    if color == "RED":
+        cstart = "\033[91m"
+    elif color == "GREEN":
+        cstart = "\033[92m"
+    elif color == "YELLOW":
+        cstart = "\033[93m"
+    elif color == "BLUE":
+        cstart = "\033[94m"
+    elif color == "PURPLE":
+        cstart = "\033[95m"
+
+    print(f"{cstart}{input}{CEND}")
