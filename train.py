@@ -91,7 +91,7 @@ def benchmark_step(state):
     optimizer.zero_grad()
     output = model(data)
     loss = F.cross_entropy(output, target)
-    loss.backward()
+    loss.backward() 
     optimizer.step()
 
     print("timestamp:%f worldsize:%d batch:%d" % (time.time(), hvd.size(), state.batch))

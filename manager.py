@@ -1,12 +1,7 @@
-from itertools import groupby
-from queue import Queue
 import time
-import sys
-
 import pandas as pd
 from enum import Enum
 from collections import OrderedDict
-
 import utils
 from progMIP import re_allocate
 import psutil
@@ -33,35 +28,16 @@ class Manager:
         self.max_parallel = max_parallel
         self.monitor_gap = monitor_gap
         self.create_working_directory()
-        self.buffer = Queue()
+        self.current_map = pd.DataFrame() # map record the nodes allocation for running jobs
+        self.job_info_dict = {} # keep all running jobs infomation
+        self.mserver = MSGOperations()
 
-        # create server ready to recv data
-        self.run_msg_server()
-
-    current_map = pd.DataFrame()
-    # A dictionary for global job information
-    job_info_dict = {}
+        # msg server to recv data from each training client
+        self.msg_server_run()
 
     # create working directory
     def create_working_directory(self):
         managerOperations.create_working_directory()
-
-    # Network Operations
-    def create_msg_client(self, address, port):
-        """Create a message client by client for reporting training throughput/speed.
-
-        Args:
-            func (func pointer): Client need to offer a function to get the real time training speed
-        """
-        return MSGOperations().create_msg_client(address, port)
-
-    def create_msg_server(self): # pass dynamic update data function into 
-        """Create a message server for receive throughput report by client
-
-        Args:
-            func (function pointer): a function for deciding when to trigger update job data
-        """
-        managerOperations.create_msg_server()
 
     # life cycle functions
     def manager_start(self):
@@ -89,8 +65,7 @@ class Manager:
 
         tmpGRB, new_data, tmpRate, tmpCost = re_allocate(cmap=initialMap, jmin=mins, jmax=maxs,
                                                             Ns=Ns,Os=Os, Tfwd=10, res_up=res_ups, res_dw = res_dws, 
-                                                            time_limit=10)
-        print(new_data)
+                                                            time_limit=10,note="manager_start")
 
         new_map = pd.DataFrame(data=new_data, index=jobnames, columns=sys_nodes)
 
@@ -101,8 +76,8 @@ class Manager:
         print("===manager start end===")
         print("=======================")
 
-    def scheduler_job_change(self, GUIDs):
-                
+    def event_job_change(self, GUIDs):
+
         # 1. Detect job leave
         # drop the job from map and job_dict
         for GUID in GUIDs:
@@ -143,70 +118,59 @@ class Manager:
         print("After fetching jobs get the map for adjustment")
         print(self.current_map)
 
-        # update buffer info to job_info_dict
-        # 
-        self.update_job_data_on_events(self.buffer, event_type="job event")
-        
         # get parameters with latest `job_info_dict`
+        self.update_job_scale_data_to_jobinfoDict()
         mins, maxs, Ns, Os, res_ups, res_dws = utils.get_optimizer_parameters_by_job_dict(self.job_info_dict)
 
         tmpGRB, new_data, tmpRate, tmpCost = re_allocate(cmap=self.current_map, jmin=mins, jmax=maxs,
-                                Ns=Ns,Os=Os, Tfwd=10, res_up=res_ups, res_dw = res_dws, time_limit=10)
+                                Ns=Ns,Os=Os, Tfwd=10, res_up=res_ups, res_dw = res_dws, time_limit=10, note="job_change_event")
 
         new_map = pd.DataFrame(data=new_data, index=self.current_map.index, columns=self.current_map.columns)
 
         managerOperations.adjust_nodes_by_map(new_map, self.current_map, self.job_info_dict)
 
-        # update current_map
         self.current_map = new_map
-        
-        # print current map after allocation
-        print("After re-allocation jobs get the new map")
-        print(self.current_map)
 
-    def scheduler_nodes_change(self, flag, nodes): 
-        print("node change called")
-
-        # Event driven update data here
-        # Use buffer data and get ns os and res_up and res_dw
-        # 
-        self.update_job_data_on_events(self.buffer, event_type= "node event")
+    def event_nodes_change(self, flag, nodes, passing_time):
+        utils.print_colored_log("A new node change event start(event node change func called)", color="PURPLE")
 
         # validate nodes name before operations 
         if sys_admin.is_nodes_belong_to_avaliable_nodes(nodes) == False:
             print("error: nodes out of avaliable nodes range")
             return
 
-        # drop or add columns for nodes in cmap
-        old_map = self.current_map
+        # get job scale and update the info to jobinfoDict
+        self.update_job_scale_data_to_jobinfoDict()
+
+        # get the needed params for optimization
         mins, maxs, Ns, Os, res_ups, res_dws = utils.get_optimizer_parameters_by_job_dict(self.job_info_dict)
 
-        print("Ns Os res_ups res_dw")
-        print(Ns, Os, res_ups, res_dws)
+        utils.print_red("Finish the Optimization Parameters Setting before the optimization")
+        print(f"Ns:{Ns} Os:{Os} res_ups:{res_ups} res_dw:{res_dws}")
+
+        old_map = self.current_map.copy() # Deep copy current map here
+        print("old map", self.current_map)
 
         if flag == JobNodeStatus.NODEIN:
-            print("node in :", nodes)
-            print("old map", self.current_map)
+            utils.print_red(f"node in:{nodes} before re_allocate()")
             for node in nodes:
                self.current_map.insert(self.current_map.shape[1], node, 0) # dataframe add one new column
             tmpGRB, new_data, tmpRate, tmpCost = re_allocate(cmap=self.current_map, jmin=mins, jmax=maxs,
-                                                                Ns=Ns,Os=Os, Tfwd=10, res_up=res_ups, res_dw = res_dws, time_limit=10)
+                                                                Ns=Ns,Os=Os, Tfwd=10, res_up=res_ups, res_dw = res_dws, time_limit=10, note="node_change_nodein:" + passing_time)
             new_map = pd.DataFrame(data=new_data, index=self.current_map.index, columns=self.current_map.columns)
         else:
-            print("node leave ", nodes)
-            print("old map", self.current_map)
+            utils.print_red(f"node leave:{nodes} before re_allocate()")
             for node in nodes:
                 tmp_map = self.current_map.drop(labels=node, axis=1) # dataframe delete one column
-
             tmpGRB, new_data, tmpRate, tmpCost = re_allocate(cmap=tmp_map, jmin=mins, jmax=maxs,
-                                                Ns=Ns,Os=Os, Tfwd=10, res_up=res_ups, res_dw = res_dws, time_limit=10)
+                                                Ns=Ns,Os=Os, Tfwd=10, res_up=res_ups, res_dw = res_dws, time_limit=10, note= "node_change_nodeout:" + passing_time)
             new_map = pd.DataFrame(data=new_data, index=tmp_map.index, columns=tmp_map.columns)
-            print("new map", new_map)
 
+        print("new map", new_map)
         managerOperations.adjust_nodes_by_map(new_map, old_map, self.job_info_dict)
-
-        # update current_map
         self.current_map = new_map
+
+        utils.print_colored_log("=======Events node change on map was end==========", color="BLUE")
 
     # for future usage
     def _terminate_manager(self):
@@ -238,25 +202,28 @@ class Manager:
 
             if jobnames:
                 print("jobnames", jobnames)
-                self.scheduler_job_change(GUIDs=jobnames)
+                self.event_job_change(GUIDs=jobnames)
 
             print("============= %f : monitor hvd process report * foot ===============" % now)
     
     def merge_ordered_NO_2_itemNO(self, job_N, job_O, N, O):
+        # Here job_N job_O N and O are all list
         # Switch job_N and job_O to a dict
-        item_no_dict = {}
-        for i in range(len(job_N)):
-            item_no_dict[job_N[i]] = job_O[i]
 
-        # insert N and O to the tmp dict
-        # Key same will replace, otherwise will insert
+        rank_obj_tmp_dict = {}
+        for i in range(len(job_N)):
+            rank_obj_tmp_dict[job_N[i]] = job_O[i]
+
+        # insert N and O to the rank_obj_tmp_dict
+        # Key same will replace(update), otherwise(rank not existed) will insert
         for i in range(len(N)):
             print("insert key Ni", N[i])
             print("insert val Oi", O[i])
-            item_no_dict[N[i]] = O[i]
+            rank_obj_tmp_dict[N[i]] = O[i]
 
         # Sort the merged dict
-        ordered_job_dict = OrderedDict(sorted(item_no_dict.items()))
+        # TODO: no need to use OrderedDict
+        ordered_job_dict = OrderedDict(sorted(rank_obj_tmp_dict.items()))
 
         # convert back to N and O (ordered)
         Ns = list(ordered_job_dict.keys())
@@ -299,101 +266,49 @@ class Manager:
                 job_item.N = res_N
                 job_item.O = res_O
         
-        if res_up != None:
+        if res_up != None and res_up != 0:
             job_item.res_up = res_up
 
-        if res_down != None:
+        if res_down != None and res_down != 0:
             job_item.res_down = res_down
 
-    def _get_group_dict(self, buffer):
-        # get job msg_item dict
-        group_dict = {}
-        for key in buffer:
-            hostname = utils.get_host_name_by_address(key)
-            jobname = utils.get_jobname_by_hostname(hostname, self.current_map)
-
-            if jobname == "":
-                continue
-            
-            msg_list = buffer[key]
-            msg_items = []
-            for msg in msg_list:
-                msg_item = utils.parser_udp_message(msg)
-                msg_items.append(msg_item)
-            group_dict[jobname] = msg_items
-        
-        return group_dict
-
-    def _cal_res_up_res_dw(self, job_items):
-        res_up, res_dw = None, None
-        if len(job_items) > 2:
-            print("update res_up and res_dw")
-
-            for i in range(len(job_items)-1,-1,-1): # reverse order find rank difference
-                
-                if job_items[i].rank_size > job_items[i-1].rank_size and job_items[i-1].rank_size == job_items[i-2].rank_size:
-                    print("================ get the res_up cost ===================")
-                    res_up = (job_items[i].time - job_items[i-1].time) - (job_items[i-1].time - job_items[i-2].time)
-                    print("==resup==", res_up)
-
-                elif job_items[i].rank_size < job_items[i-1].rank_size and job_items[i-1].rank_size == job_items[i-2].rank_size:
-                    print("================ get the res_down cost =================")
-                    print(type(job_items[i].time))
-                    print(job_items[i].time)
-                    res_dw = (job_items[i].time - job_items[i-1].time) - (job_items[i-1].time - job_items[i-2].time)
-                    print("==resdw==", res_dw)
-        return res_up, res_dw
-
-
-    def update_job_data_on_events(self, buffer, event_type):
+    # TODO: Working here
+    def update_job_scale_data_to_jobinfoDict(self):
         ''' job change or node change trigger updating data for re-allocation'''
-        if len(buffer) == 0:
-            print("No valid information and skip update process")
-            return
         
-        group_dict = self._get_group_dict(buffer)
+        if len(self.mserver.buffer) == 0:
+            utils.print_colored_log("There is no any msg in buffer now", color="YELLOW")
+        else:
+            utils.print_colored_log(f"buffer keys is {self.mserver.buffer.keys()}", color="YELLOW")
 
-        if len(group_dict) == 0:
-            print("Jobs in current_map has no any training msg in buffer, probably means all jobs are new fetched(not started yet)," \
-            " do not need to use historial information to do the update, so return the update function here")
-            return
+        job_scale_info_dict = self.mserver.scale_info_dict
 
-        # for each job get the cost and thrpt info
-        for jobname in group_dict:
-            job_items = group_dict[jobname]
+        print(f"mserver scale info dict keys {self.mserver.scale_info_dict.keys()}")
+
+        # Co-exist job in 
+        coexist_jobs_id = list(set(self.job_info_dict.keys()) & set(job_scale_info_dict.keys()))
+        
+        print(f"job info dict keys {self.job_info_dict.keys()}")
+        print(f"job scale info dict keys {job_scale_info_dict.keys()}")
+        print(f"Coexisted job ids {coexist_jobs_id}")
+
+        for jobname in coexist_jobs_id:
+            job_scale_info = job_scale_info_dict[jobname]
+            nodes_nums = [rank/NUM_OF_GPUs_PER_NODE for rank in job_scale_info.rank_speed_dict.keys()]
             
-            # we will assume the id is right for now
-            # job_items.sort(key=lambda x: x.id)
+            N = nodes_nums
+            print(f"N list is {N}")
 
-            res_up, res_dw = self._cal_res_up_res_dw(job_items)
+            O = list(job_scale_info.rank_speed_dict.values())
+            print(f"O list is {O}")
+            res_up = job_scale_info.add_overhead
+            res_dw = job_scale_info.reduce_overhead
 
-            # TODO: the cal throughput part need to change(use latest throughput)
-            N = []
-            O = []
-            for key, group in groupby(job_items, lambda x: x.rank_size): # key: different rank size for job - group: items of this job with this ranksize
-                node_num = int(key)/NUM_OF_GPUs_PER_NODE
-                N.append(int(node_num))
-                group_list = list(group)
-                
-                thrputs = []
-                for i in range(0, len(group_list) - 1):
-                    msg_time_gap = float(group_list[i + 1].time) - float(group_list[i].time)
-                    thrput = float(group_list[i].credit) / msg_time_gap
-                    thrputs.append(thrput)
-                avg_thrput = thrputs[-1] # use the last thrput as the current thrput
+            # Update collect job scale info from server to JobInfoDict
+            self.update_scaling_and_cost_data_2_jobInfoDict(jobname=jobname, N=N, O=O, res_up=res_up, res_down=res_dw)
 
-                O.append(avg_thrput)
-        
-        # Update collect info to JobInfoDict
-        self.update_scaling_and_cost_data_2_jobInfoDict(jobname=jobname, N=N, O=O, res_up=res_up, res_down=res_dw)
-
-    def run_msg_server(self):
-        # run server daemon
-        print("run server and update data")
-        mserver=MSGOperations()
-        self.buffer = mserver.buffer
-
-        p_server = Thread(target=mserver.create_msg_server) # keep updating buffer data
+    def msg_server_run(self):
+        p_server = Thread(target=self.mserver.create_msg_server)
         p_server.start()
 
     def is_first_round(self, counters):
@@ -403,10 +318,9 @@ class Manager:
                 flag = False
         return flag
 
-    # node come and leave
-    def events_launcher(self):
-        self.manager_start()
-
+    def run_scheduler_events_simulator(self):
+        """Simulate cluster nodes come and leave
+        """
         # create events source
         cluster_nodes = sys_admin.get_cluster_nodes()
         trace = trace_generator.synthetic_trace(nodes=cluster_nodes, nf=20000)
@@ -424,7 +338,7 @@ class Manager:
 
         start_time = time.time()
 
-        # events tick driver
+        # Event loop
         while(True):
             time.sleep(0.1) # check each 0.1 second(could change)
             
@@ -438,40 +352,39 @@ class Manager:
                 current_time_tuple = timestamps_tuple[counters[node]]
 
                 if passing_time > current_time_tuple[0] and flags[node] == False:
-                    print("node: " + node + " in") # trigger node in event
+                    utils.print_red("Event Simulator: Node " + node + " in at time:" + str(passing_time)) # trigger node in event
                     coming_nodes.append(node)
                     flags[node] = True
 
                 if passing_time > current_time_tuple[1] and flags[node] == True:
-                    print("node: " + node + " leave") # trigger node leave event
+                    utils.print_red("Event Simulator: Node: " + node + " leave at time:" + str(passing_time)) # trigger node leave event
                     leaving_nodes.append(node)
                     flags[node] = False
                     counters[node] = counters[node] + 1
             
             # when node counter == 0 that is the start, just skip the start phase
             if coming_nodes and self.is_first_round(counters) == False:
-                self.scheduler_nodes_change(JobNodeStatus.NODEIN, coming_nodes)
+                self.event_nodes_change(JobNodeStatus.NODEIN, coming_nodes, str(passing_time) )
 
             if leaving_nodes:
-                self.scheduler_nodes_change(JobNodeStatus.NODEOUT, leaving_nodes)
+                self.event_nodes_change(JobNodeStatus.NODEOUT, leaving_nodes, str(passing_time))
 
 def main():
 
-    # create manager
-    # basic settings and msg server
+    # 1. Create manager
+    # init manager and start running
     m = Manager()
+    m.manager_start()
 
-    # 2. start jobs and run as events come
-    p_events = Thread(target=m.events_launcher)
+    # Run events simulator
+    p_events = Thread(target=m.run_scheduler_events_simulator)
     p_events.start()
     
     # 3. process monitor job pid
-    p_monitor = Thread(target=m.monitor_hvd_processes)
-    p_monitor.start()
+    #p_monitor = Thread(target=m.monitor_hvd_processes)
+    #p_monitor.start()
 
     # for local testing purpose
     
-
-
 if __name__ == "__main__":
     main()

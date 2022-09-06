@@ -20,7 +20,7 @@ def create_msg_server(): # pass dynamic update data function into
     MSGOperations().create_msg_server()
 
 def add_job(jobname, nodes, job_info_dict):
-    print("Add job was called")
+    utils.print_red("Add job was called")
     print("jobname %s on nodes %s" %(jobname, nodes))
     # if the job not being assigned node
     # just skip the process
@@ -36,7 +36,7 @@ def add_job(jobname, nodes, job_info_dict):
     myenv = os.environ
     myenv["MKL_SERVICE_FORCE_INTEL"] = "1"
 
-    # 2. Launch new job and get process id
+    # 2. Launch new job and get process id 
     with open("stdout.txt","w") as out, open("stderr.txt","w") as err:
         print("command", command)
         p = Popen(command, shell=True, env=myenv, stdout=out, stderr=err)
@@ -65,13 +65,12 @@ def create_discovery_file(jobname, nodes):
     return discovery_path
 
 def generate_command(discover_file_path, jobname, job_info_dict):
-    print("jobname type", type(jobname))
     scriptPath = job_info_dict[jobname].path
     command = "/lus/theta-fs0/software/thetagpu/conda/2021-06-26/mconda3/bin/horovodrun -np 1 --host-discovery-script " + discover_file_path + " python " + scriptPath + " --jobname " + jobname
     return command
 
 def del_job(jobname, job_info_dict):
-    print("del job called")
+    utils.print_red("del job called")
     # 1. check the pid is running
     job_pid = job_info_dict[jobname].pid
     if job_pid == -1:
@@ -96,19 +95,29 @@ def del_discover_files(jobname):
     if os.path.exists(discovery_file_path):
         os.remove(discovery_file_path)
 
-# Node changes
 def add_nodes_for_job(jobname, nodes):
-    print("add nodes for job %s called" % jobname)
-    print("added nodes: ", nodes)    
-
+    utils.print_red(f"add nodes {nodes} for job {jobname} called")
     # discover host file
     discover_file_path = os.path.join(WORKING_DIR, "discover_host_" + jobname + ".sh")
-    
+
     # Write node info to discover file
     if os.path.exists(discover_file_path):
+        lines = []
+        
+        # open file and print before add
+        with open(discover_file_path, 'r') as r:
+            lines = r.readlines()
+        utils.print_red(f'hostfile before add {lines}')
+
+        # open file and append
         with open(discover_file_path, 'a') as w:
             for node in nodes:
                 w.write("echo " + node + ":" + str(NUM_OF_GPUs_PER_NODE) + "\n")
+
+        # open file and print after add
+        with open(discover_file_path, 'r') as r:
+            new_lines = r.readlines()
+        utils.print_red(f'hostfile after add {new_lines}')
 
 def is_line_contain_delete_nodes(line, nodes):
     flag = False
@@ -119,22 +128,22 @@ def is_line_contain_delete_nodes(line, nodes):
     return flag
 
 def del_nodes_for_job(jobname, nodes):
-    print("delete node for job %s called" % jobname)
-    print("delete nodes: ", nodes)
+    utils.print_red(f"delete node {nodes} for job {jobname}")
 
-    # del host from corresponding hostfile
     discover_file_path = os.path.join(WORKING_DIR, "discover_host_" + jobname + ".sh")
     if os.path.exists(discover_file_path):
         # Read the file filtered out the delete node line and put it back
         lines = []
         with open(discover_file_path, 'r') as r:
             lines = r.readlines()
-        
+        utils.print_red(f'hostfile before del {lines}')
+
         # filter out deleted nodes
         new_lines = []
         for line in lines:
             if is_line_contain_delete_nodes(line, nodes) == False:
                 new_lines.append(line)
+        utils.print_red(f'hostfile after del {new_lines}')
 
         # write back
         with open(discover_file_path, 'w') as w:
@@ -147,8 +156,7 @@ def adjust_nodes_by_map(new_map, old_map, job_info_dict):
     Args:
         newMap (dataframe): the input dataframe from optimizer
     """
-    print("adjust_nodes_by_map(newmap, oldmap, jobInfoDict) called")
-
+    utils.print_colored_log("Compare old map and new map changes and do the adjustment", color="PURPLE")
     # map to dict
     old_job_nodes_dict = utils.get_job_nodes_mapping_from(old_map)
     new_job_nodes_dict = utils.get_job_nodes_mapping_from(new_map)
@@ -178,7 +186,7 @@ def adjust_nodes_by_map(new_map, old_map, job_info_dict):
     for job in overlappedJobs:
         old_nodes = old_job_nodes_dict[job]
         new_nodes = new_job_nodes_dict[job]
-        
+
         # check diff
         if set(old_nodes) != set(new_nodes):
             # pid = -1 means this job never launched before

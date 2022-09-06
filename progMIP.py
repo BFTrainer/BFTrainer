@@ -8,7 +8,7 @@ def interp1d4s(Ns, Os, Nx):
     f = interpolate.interp1d(Ns, Os)
     return float(f(Nx))
 
-def re_allocate(cmap, jmin, jmax, Ns, Os, Tfwd, res_up, res_dw, time_limit, solver=CBC):
+def re_allocate(cmap, jmin, jmax, Ns, Os, Tfwd, res_up, res_dw, time_limit, note, solver=CBC):
     start_time = str(time.time())
     joblist = cmap.index
     nodelist= cmap.columns
@@ -24,6 +24,7 @@ def re_allocate(cmap, jmin, jmax, Ns, Os, Tfwd, res_up, res_dw, time_limit, solv
     with open("%s-b4.log" % start_time, 'w') as fp:
         fp.write(cmap.to_string() + '\n')
         fp.write(f"jmin={jmin}, jmax={jmax}, Ns={Ns}, Os={Os}, Tfwd={Tfwd}, res_up={res_up}, res_dw={res_dw}, time_limit={time_limit}\n")
+        fp.write(note)
 
     c_map = cmap.values
         
@@ -131,6 +132,7 @@ def re_allocate(cmap, jmin, jmax, Ns, Os, Tfwd, res_up, res_dw, time_limit, solv
     sol_map_pd = pd.DataFrame(sol_map, index=joblist, columns=nodelist)
     with open("%s-after.log" % start_time, 'w') as fp:
         fp.write(sol_map_pd.to_string() + '\n')
-        fp.write(f"opt_mdl.Status={status}, rate={rate}, cost={cost}")
+        fp.write(f"opt_mdl.Status={status}, rate={rate}, cost={cost}\n")
+        fp.write(note)
         
     return status, sol_map, np.array(rate), np.array(cost)
