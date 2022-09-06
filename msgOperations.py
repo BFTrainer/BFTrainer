@@ -24,7 +24,7 @@ class MSGOperations:
             return
 
         jobname_idx = msg.find("jobname:")
-        jobname_str = msg[jobname_idx + len("jobname:"):-1]
+        jobname_str = msg[jobname_idx + len("jobname:"):]
         
         idx = msg.find("rank_size:")
         tail_str = msg[idx + len("rank_size:"):] # cut string from ranks size
@@ -44,7 +44,8 @@ class MSGOperations:
 
     def update_scale_info_dict(self, jobname, msg, file):
         """Update rescale info dict only when rank change"""
-        
+        utils.print_colored_log(f"job {jobname} update scale info dict func called", color="GREEN")
+
         # Here means the job is a new started job and no training information in the buffer that we could use to 
         # cal training speed and add reduce overhead, so there is no meaning to keep on
         if jobname not in self.buffer:
@@ -84,7 +85,7 @@ class MSGOperations:
                     job_scale_info.reduce_overhead = overhead
             self.scale_info_dict[jobname] = job_scale_info
 
-        print(f"jobname is {jobname} and job_scale_info keys:{job_scale_info.rank_speed_dict.keys()} values {job_scale_info.rank_speed_dict.values()} job add overhead {job_scale_info.add_overhead} job reduce overhead {job_scale_info.reduce_overhead}")
+        utils.print_colored_log(f"jobname is {jobname} and job_scale_info keys:{job_scale_info.rank_speed_dict.keys()} values {job_scale_info.rank_speed_dict.values()} job add overhead {job_scale_info.add_overhead} job reduce overhead {job_scale_info.reduce_overhead}", color="GREEN")
         file.write(f"jobname is {jobname} and job_scale_info keys:{job_scale_info.rank_speed_dict.keys()} values {job_scale_info.rank_speed_dict.values()} job add overhead {job_scale_info.add_overhead} job reduce overhead {job_scale_info.reduce_overhead}\n")
 
     # Sever - manager side
@@ -102,9 +103,9 @@ class MSGOperations:
                 data, addr = s.recvfrom(1024)
                 address_id = 'Address:%s ' % addr[0]
                 msg = address_id + str(data, encoding = "utf-8")
-                # print(msg)
-                jobname, current_rank = self.get_jobid_and_ranksize_from_msg(msg) 
-                
+                print(msg)
+                jobname, current_rank = self.get_jobid_and_ranksize_from_msg(msg)
+
                 stored_rank = 0
                 # get old rank
                 if jobname in job_current_rank_dict:
@@ -112,10 +113,11 @@ class MSGOperations:
 
                 if stored_rank != current_rank:
                     w.write("Rank change triggered\n")
-                    print(f"stored rank: {stored_rank} current_rank: {current_rank}")
+                    w.write(f"stored rank: {stored_rank} current_rank: {current_rank}\n")
+                    utils.print_colored_log(f"[information from msgOperations.py]: Rank change detected, job {jobname} previous rank: {stored_rank} current_rank: {current_rank}", color="GREEN")
                     self.update_scale_info_dict(jobname, msg, w)
-                    stored_rank = current_rank # update rank
 
+                    stored_rank = current_rank # update rank
                     job_current_rank_dict[jobname] = stored_rank
 
                 # get the message buffer info

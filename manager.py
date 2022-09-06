@@ -132,7 +132,7 @@ class Manager:
         self.current_map = new_map
 
     def event_nodes_change(self, flag, nodes, passing_time):
-        print("node change called")
+        utils.print_colored_log("A new node change event start(event node change func called)", color="PURPLE")
 
         # validate nodes name before operations 
         if sys_admin.is_nodes_belong_to_avaliable_nodes(nodes) == False:
@@ -145,25 +145,23 @@ class Manager:
         # get the needed params for optimization
         mins, maxs, Ns, Os, res_ups, res_dws = utils.get_optimizer_parameters_by_job_dict(self.job_info_dict)
 
-        print("Ns Os res_ups res_dw")
-        print(Ns, Os, res_ups, res_dws)
+        utils.print_red("Finish the Optimization Parameters Setting before the optimization")
+        print(f"Ns:{Ns} Os:{Os} res_ups:{res_ups} res_dw:{res_dws}")
 
         old_map = self.current_map.copy() # Deep copy current map here
+        print("old map", self.current_map)
 
         if flag == JobNodeStatus.NODEIN:
-            print("node in :", nodes)
-            print("old map", self.current_map)
+            utils.print_red(f"node in:{nodes} before re_allocate()")
             for node in nodes:
                self.current_map.insert(self.current_map.shape[1], node, 0) # dataframe add one new column
             tmpGRB, new_data, tmpRate, tmpCost = re_allocate(cmap=self.current_map, jmin=mins, jmax=maxs,
                                                                 Ns=Ns,Os=Os, Tfwd=10, res_up=res_ups, res_dw = res_dws, time_limit=10, note="node_change_nodein:" + passing_time)
             new_map = pd.DataFrame(data=new_data, index=self.current_map.index, columns=self.current_map.columns)
         else:
-            print("node leave ", nodes)
-            print("old map", self.current_map) 
+            utils.print_red(f"node leave:{nodes} before re_allocate()")
             for node in nodes:
                 tmp_map = self.current_map.drop(labels=node, axis=1) # dataframe delete one column
-
             tmpGRB, new_data, tmpRate, tmpCost = re_allocate(cmap=tmp_map, jmin=mins, jmax=maxs,
                                                 Ns=Ns,Os=Os, Tfwd=10, res_up=res_ups, res_dw = res_dws, time_limit=10, note= "node_change_nodeout:" + passing_time)
             new_map = pd.DataFrame(data=new_data, index=tmp_map.index, columns=tmp_map.columns)
@@ -172,7 +170,7 @@ class Manager:
         managerOperations.adjust_nodes_by_map(new_map, old_map, self.job_info_dict)
         self.current_map = new_map
 
-        print("=======events node change end==========")
+        utils.print_colored_log("=======Events node change on map was end==========", color="BLUE")
 
     # for future usage
     def _terminate_manager(self):
@@ -281,7 +279,7 @@ class Manager:
         if len(self.mserver.buffer) == 0:
             utils.print_colored_log("There is no any msg in buffer now", color="YELLOW")
         else:
-            print(f"buffer keys is {self.mserver.buffer.keys()}")
+            utils.print_colored_log(f"buffer keys is {self.mserver.buffer.keys()}", color="YELLOW")
 
         job_scale_info_dict = self.mserver.scale_info_dict
 
@@ -298,7 +296,6 @@ class Manager:
             job_scale_info = job_scale_info_dict[jobname]
             nodes_nums = [rank/NUM_OF_GPUs_PER_NODE for rank in job_scale_info.rank_speed_dict.keys()]
             
-            print("==========Working here and Debug==========")
             N = nodes_nums
             print(f"N list is {N}")
 
@@ -355,12 +352,12 @@ class Manager:
                 current_time_tuple = timestamps_tuple[counters[node]]
 
                 if passing_time > current_time_tuple[0] and flags[node] == False:
-                    print("node: " + node + " in at time:" + str(passing_time)) # trigger node in event
+                    utils.print_red("Event Simulator: Node " + node + " in at time:" + str(passing_time)) # trigger node in event
                     coming_nodes.append(node)
                     flags[node] = True
 
                 if passing_time > current_time_tuple[1] and flags[node] == True:
-                    print("node: " + node + " leave at time:" + str(passing_time)) # trigger node leave event
+                    utils.print_red("Event Simulator: Node: " + node + " leave at time:" + str(passing_time)) # trigger node leave event
                     leaving_nodes.append(node)
                     flags[node] = False
                     counters[node] = counters[node] + 1
