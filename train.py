@@ -45,7 +45,7 @@ hvd.init()
 
 if hvd.rank() == 0:
     print("create udp client")
-    mo = MessageOperator(address='172.23.2.189', port=9999)
+    mo = MessageOperator(address='172.23.2.198', port=9999)
 
 if args.cuda:
     # Horovod: pin GPU to local rank.
