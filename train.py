@@ -42,10 +42,10 @@ args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 
 hvd.init()
+#print("debug mark: 1")
 
-if hvd.rank() == 0:
-    print("create udp client")
-    mo = MessageOperator(address='172.23.2.198', port=9999)
+print("create udp client")
+mo = MessageOperator(address='172.23.2.198', port=9999)
 
 if args.cuda:
     # Horovod: pin GPU to local rank.
@@ -60,7 +60,6 @@ model = getattr(models, args.model)()
 # By default, Adasum doesn't need scaling up learning rate.
 def lr_scaler():
     return hvd.size() if not args.use_adasum else 1
-
 
 if args.cuda:
     # Move model to GPU.
@@ -91,7 +90,7 @@ def benchmark_step(state):
     optimizer.zero_grad()
     output = model(data)
     loss = F.cross_entropy(output, target)
-    loss.backward() 
+    loss.backward()
     optimizer.step()
 
     print("timestamp:%f worldsize:%d batch:%d" % (time.time(), hvd.size(), state.batch))
@@ -100,12 +99,10 @@ def benchmark_step(state):
         state.batch = 0
         state.commit()
 
-
 def log(s, nl=True):
     if hvd.rank() != 0:
         return
     print(s, end='\n' if nl else '')
-
 
 log('Model: %s' % args.model)
 log('Batch size: %d' % args.batch_size)
@@ -114,6 +111,7 @@ log('Number of %ss: %d' % (device, hvd.size()))
 
 @hvd.elastic.run
 def run_benchmark(state):
+    # print("debug mark: 3")
    # Warm-up
     if not state.warm:
         log('Running warmup...')
@@ -125,6 +123,7 @@ def run_benchmark(state):
     if state.iter == 0:
         log('Running benchmark...')
 
+    #print("debug mark: 4")
     for x in range(state.iter, args.num_iters):
         # time = timeit.timeit(lambda: benchmark_step(state), number=args.num_batches_per_iter)
         # tick = time.time()
@@ -133,7 +132,7 @@ def run_benchmark(state):
         # log('Iter #%d: %.1f img/sec per %s' % (x, img_sec, device))
         if hvd.rank() == 0:
             mo.report(credit=args.batch_size * hvd.size(), rank_size = hvd.size(), jobname=args.jobname)
-        
+
         state.img_secs.append(0)
         state.iter = x
         state.commit()
@@ -142,6 +141,8 @@ def run_benchmark(state):
 def on_state_reset():
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr * lr_scaler()
+
+# print("debug mark: 2")
 
 state = hvd.elastic.TorchState(model, optimizer, img_secs=[], iter=0, batch=0, warm=False)
 state.register_reset_callbacks([on_state_reset])
