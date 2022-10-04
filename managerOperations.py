@@ -5,7 +5,11 @@ import utils
 import psutil
 import stat
 
-NUM_OF_GPUs_PER_NODE = 8
+if utils.is_theta_cluster():
+    NUM_OF_GPUs_PER_NODE = 8
+else:
+    NUM_OF_GPUs_PER_NODE = 4
+
 WORKING_DIR = utils.working_dir()
 
 def create_working_directory():
@@ -42,9 +46,13 @@ def add_job(jobname, nodes, job_info_dict):
         p = Popen(command, shell=True, env=myenv, stdout=out, stderr=err)
 
         hvdrunParentPid = p.pid
-        fp = psutil.Process(hvdrunParentPid)
+        
+        if utils.is_theta_cluster():
+            fp = psutil.Process(hvdrunParentPid)
+            hvdpid = fp.children()[0].pid
+        else:
+            hvdpid = hvdrunParentPid # On polaris cluster the parent pid is the hvdrun pid
 
-        hvdpid = fp.children()[0].pid
         print("new job launch success and the hvdpid is:", hvdpid)
 
         # 3. update process id to `jobInfoDict`
@@ -66,7 +74,10 @@ def create_discovery_file(jobname, nodes):
 
 def generate_command(discover_file_path, jobname, job_info_dict):
     scriptPath = job_info_dict[jobname].path
-    command = "/lus/theta-fs0/software/thetagpu/conda/2021-06-26/mconda3/bin/horovodrun -np 1 --host-discovery-script " + discover_file_path + " python " + scriptPath + " --jobname " + jobname
+    if utils.is_theta_cluster():
+        command = "/lus/theta-fs0/software/thetagpu/conda/2021-06-26/mconda3/bin/horovodrun -np 1 --host-discovery-script " + discover_file_path + " python " + scriptPath + " --jobname " + jobname
+    else:
+        command = "horovodrun -np 1 --host-discovery-script " + discover_file_path + " python " + scriptPath + " --jobname " + jobname
     return command
 
 def del_job(jobname, job_info_dict):
