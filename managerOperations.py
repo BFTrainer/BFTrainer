@@ -17,9 +17,6 @@ def create_working_directory():
     if not work_dir:
         os.mkdir(WORKING_DIR)
 
-def create_msg_client(address, port):
-    return MSGOperations().create_msg_client(address, port)
-
 def create_msg_server(): # pass dynamic update data function into 
     MSGOperations().create_msg_server()
 

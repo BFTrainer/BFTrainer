@@ -1,11 +1,8 @@
 import socket
 import utils
 
-# This address is for 
-# ADDRESS = '172.23.2.202' # thetagpu14
-
 ADDRESS = '0.0.0.0'
-PORT = 9999
+PORT = 5555
 
 class scale_info:
     def __init__(self, id) -> None:
@@ -92,18 +89,8 @@ class MSGOperations:
     def create_msg_server(self):
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            
-            if utils.is_theta_cluster():
-                tmp_add = ADDRESS
-                print(f"prepare to bind address: {tmp_add}")
-                s.bind((ADDRESS, PORT))  # in thetagpu we could bind to recv all information
-            else:
-                tmp_add = "10.201.4.158"
-                print(f"prepare to bind address: {tmp_add}")
-                s.bind((tmp_add, PORT))  # in polaris: [Errno 98] Address already in use
-
-            print("after bind address")
-            print("create udp server success")
+            s.bind((ADDRESS, PORT))
+            print(f"create udp server success, address is {ADDRESS} and port is {PORT}")
             w = open("msg.log", "w")
 
             # This is a temp way to detect the rank change method
