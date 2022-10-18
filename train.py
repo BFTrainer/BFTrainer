@@ -45,7 +45,7 @@ hvd.init()
 #print("debug mark: 1")
 
 print("create udp client")
-mo = MessageOperator(address='172.23.2.198', port=9999)
+mo = MessageOperator(address='10.201.4.62', port=5555)
 
 if args.cuda:
     # Horovod: pin GPU to local rank.
@@ -93,7 +93,7 @@ def benchmark_step(state):
     loss.backward()
     optimizer.step()
 
-    print("timestamp:%f worldsize:%d batch:%d" % (time.time(), hvd.size(), state.batch))
+    #print("timestamp:%f worldsize:%d batch:%d" % (time.time(), hvd.size(), state.batch))
     state.batch += 1
     if state.batch == args.num_batches_per_commit:
         state.batch = 0

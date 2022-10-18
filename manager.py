@@ -186,7 +186,7 @@ class Manager:
     def monitor_hvd_processes(self):
         while True:
             now = time.time()
-            print("============= %f : monitor hvd process report * Head ===============" % now)
+            print(f"============= {now} : monitor hvd process report * Head report every {MONITOR_GAP}s ===============")
             
             time.sleep(self.monitor_gap)
             jobnames = []
@@ -204,7 +204,7 @@ class Manager:
                 print("jobnames", jobnames)
                 self.event_job_change(GUIDs=jobnames)
 
-            print("============= %f : monitor hvd process report * foot ===============" % now)
+            print(f"============= {now} : monitor hvd process report * foot ===============")
     
     def merge_ordered_NO_2_itemNO(self, job_N, job_O, N, O):
         # Here job_N job_O N and O are all list
@@ -381,8 +381,8 @@ def main():
     p_events.start()
     
     # 3. process monitor job pid
-    #p_monitor = Thread(target=m.monitor_hvd_processes)
-    #p_monitor.start()
+    p_monitor = Thread(target=m.monitor_hvd_processes)
+    p_monitor.start()
 
     # for local testing purpose
     

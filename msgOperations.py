@@ -1,11 +1,8 @@
 import socket
 import utils
 
-# This address is for 
-# ADDRESS = '172.23.2.202' # thetagpu14
-
-ADDRESS = '0.0.0.0' # Here broadcast to all address
-PORT = 9999
+ADDRESS = '0.0.0.0'
+PORT = 5555
 
 class scale_info:
     def __init__(self, id) -> None:
@@ -93,7 +90,7 @@ class MSGOperations:
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.bind((ADDRESS, PORT))
-            print("create udp server success")
+            print(f"create udp server success, address is {ADDRESS} and port is {PORT}")
             w = open("msg.log", "w")
 
             # This is a temp way to detect the rank change method
@@ -103,7 +100,7 @@ class MSGOperations:
                 data, addr = s.recvfrom(1024)
                 address_id = 'Address:%s ' % addr[0]
                 msg = address_id + str(data, encoding = "utf-8")
-                print(msg)
+                # print(msg)
                 jobname, current_rank = self.get_jobid_and_ranksize_from_msg(msg)
 
                 stored_rank = 0
