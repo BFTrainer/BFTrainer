@@ -100,7 +100,7 @@ class MSGOperations:
                 data, addr = s.recvfrom(1024)
                 address_id = 'Address:%s ' % addr[0]
                 msg = address_id + str(data, encoding = "utf-8")
-                print(msg)
+                # print(msg)
                 jobname, current_rank = self.get_jobid_and_ranksize_from_msg(msg)
 
                 stored_rank = 0
