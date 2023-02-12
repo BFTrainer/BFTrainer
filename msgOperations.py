@@ -1,7 +1,10 @@
-import socket
+import socket, time
 import utils
 
-ADDRESS = '0.0.0.0'
+# This address is for 
+# ADDRESS = '172.23.2.202' # thetagpu14
+
+ADDRESS = '0.0.0.0' # Here broadcast to all address
 PORT = 5555
 
 class scale_info:
@@ -11,7 +14,7 @@ class scale_info:
         self.add_overhead = 0
         self.reduce_overhead = 0
 
-class MSGOperations:
+class MSGServer:
     def __init__(self) -> None:
         self.buffer = {}
         self.scale_info_dict = {} # keys:jobnames value:scale_info instance
@@ -135,8 +138,23 @@ class MSGOperations:
             print(ex)
             s.close()
 
-    # Client
-    def create_msg_client(self, address, port):
+class MSGClient:
+    def __init__(self, address, port) -> None:
+        self.address = address
+        self.port = port
+        self.socket = self.create_msg_client()
+        self.sequence_id = 0
+
+    def report(self, credit, rank_size, jobname):
+        t = time.time()
+        report_msg = 'id:%d time:%f rank_size:%d credit:%s jobname:%s' % (self.sequence_id, t, rank_size, credit, jobname)
+        self.sequence_id += 1
+        try:
+            self.socket.sendto(str.encode(report_msg), (self.address, self.port))
+        except Exception as ex:
+            self.socket.close()
+
+    def create_msg_client(self):
         """Create udp client
         Args:
             address (str): msg address

@@ -15,7 +15,8 @@ def get_cluster_nodes():
         #"thetagpu21", "thetagpu22"]
 
     else:
-        nodelist = ["x3209c0s13b1n0", "x3209c0s19b0n0", "x3209c0s19b1n0", "x3209c0s1b0n0"]
+        #nodelist = ["node07", "node08", "node09", "node10"]
+        nodelist = ["x3212c0s13b1n0", "x3212c0s19b0n0", "x3212c0s19b1n0", "x3212c0s1b0n0"]
     return nodelist
 
 def is_nodes_belong_to_avaliable_nodes(nodes):

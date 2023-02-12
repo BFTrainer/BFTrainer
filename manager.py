@@ -7,7 +7,7 @@ from progMIP import re_allocate
 import psutil
 import numpy as np
 import managerOperations
-from msgOperations import MSGOperations
+from msgOperations import MSGServer
 import sys_admin
 from threading import Thread
 import trace_generator
@@ -27,22 +27,17 @@ class Manager:
     def __init__(self, max_parallel = MAXIMUM_PARALLEL, monitor_gap = MONITOR_GAP):
         self.max_parallel = max_parallel
         self.monitor_gap = monitor_gap
-        self.create_working_directory()
-        self.current_map = pd.DataFrame() # map record the nodes allocation for running jobs
-        self.job_info_dict = {} # keep all running jobs infomation
-        self.mserver = MSGOperations()
-
+        managerOperations.create_working_directory()
+        self.current_map = pd.DataFrame() # map record the nodes allocation for current running jobs
+        self.job_info_dict = {} # key:jobId value:jobInfo instance (maintain all current running jobs)
+        self.mserver = MSGServer() # msg server instance
+        self.cluster_nodes = sys_admin.get_cluster_nodes() # the whole cluster nodes
         # msg server to recv data from each training client
         self.msg_server_run()
 
-    # create working directory
-    def create_working_directory(self):
-        managerOperations.create_working_directory()
-
     # life cycle functions
     def manager_start(self):
-        sys_nodes=sys_admin.get_cluster_nodes()
-        if len(sys_nodes) == 0 or (sys_nodes is None):
+        if len(self.cluster_nodes) == 0 or (self.cluster_nodes is None):
             return
         
         if utils.get_job_queue_len() == 0:
@@ -57,8 +52,8 @@ class Manager:
         
         # build inital map
         jobnames = self.job_info_dict.keys()
-        data = np.zeros((len(jobnames), len(sys_nodes)), dtype=int) # initial fake data
-        initialMap = pd.DataFrame(data=data, index=jobnames, columns=sys_nodes)
+        data = np.zeros((len(jobnames), len(self.cluster_nodes)), dtype=int) # initial fake data
+        initialMap = pd.DataFrame(data=data, index=jobnames, columns=self.cluster_nodes)
 
         # Feed the optimizer and get the optimized newmap
         mins, maxs, Ns, Os, res_ups, res_dws = utils.get_optimizer_parameters_by_job_dict(self.job_info_dict)
@@ -67,7 +62,7 @@ class Manager:
                                                             Ns=Ns,Os=Os, Tfwd=10, res_up=res_ups, res_dw = res_dws, 
                                                             time_limit=10,note="manager_start")
 
-        new_map = pd.DataFrame(data=new_data, index=jobnames, columns=sys_nodes)
+        new_map = pd.DataFrame(data=new_data, index=jobnames, columns=self.cluster_nodes)
 
         managerOperations.adjust_nodes_by_map(new_map=new_map, old_map=initialMap, job_info_dict = self.job_info_dict)
         self.current_map = new_map
@@ -119,7 +114,7 @@ class Manager:
         print(self.current_map)
 
         # get parameters with latest `job_info_dict`
-        self.update_job_scale_data_to_jobinfoDict()
+        self.get_previous_running_jobs_data_and_update_jobInfoDict()
         mins, maxs, Ns, Os, res_ups, res_dws = utils.get_optimizer_parameters_by_job_dict(self.job_info_dict)
 
         tmpGRB, new_data, tmpRate, tmpCost = re_allocate(cmap=self.current_map, jmin=mins, jmax=maxs,
@@ -134,13 +129,13 @@ class Manager:
     def event_nodes_change(self, flag, nodes, passing_time):
         utils.print_colored_log("A new node change event start(event node change func called)", color="PURPLE")
 
-        # validate nodes name before operations 
+        # Validate nodes names
         if sys_admin.is_nodes_belong_to_avaliable_nodes(nodes) == False:
             print("error: nodes out of avaliable nodes range")
             return
 
-        # get job scale and update the info to jobinfoDict
-        self.update_job_scale_data_to_jobinfoDict()
+        # Get job scale and update the info to jobinfoDict
+        self.get_previous_running_jobs_data_and_update_jobInfoDict()
 
         # get the needed params for optimization
         mins, maxs, Ns, Os, res_ups, res_dws = utils.get_optimizer_parameters_by_job_dict(self.job_info_dict)
@@ -167,6 +162,7 @@ class Manager:
             new_map = pd.DataFrame(data=new_data, index=tmp_map.index, columns=tmp_map.columns)
 
         print("new map", new_map)
+
         managerOperations.adjust_nodes_by_map(new_map, old_map, self.job_info_dict)
         self.current_map = new_map
 
@@ -273,7 +269,7 @@ class Manager:
             job_item.res_down = res_down
 
     # TODO: Working here
-    def update_job_scale_data_to_jobinfoDict(self):
+    def get_previous_running_jobs_data_and_update_jobInfoDict(self):
         ''' job change or node change trigger updating data for re-allocation'''
         
         if len(self.mserver.buffer) == 0:
@@ -308,6 +304,8 @@ class Manager:
             self.update_scaling_and_cost_data_2_jobInfoDict(jobname=jobname, N=N, O=O, res_up=res_up, res_down=res_dw)
 
     def msg_server_run(self):
+        """create msg server and ready to monitor messages from clients
+        """
         p_server = Thread(target=self.mserver.create_msg_server)
         p_server.start()
 
@@ -322,8 +320,7 @@ class Manager:
         """Simulate cluster nodes come and leave
         """
         # create events source
-        cluster_nodes = sys_admin.get_cluster_nodes()
-        trace = trace_generator.synthetic_trace(nodes=cluster_nodes, nf=20000)
+        trace = trace_generator.synthetic_trace(nodes=self.cluster_nodes, nf=20000)
         
         # write events trace to log
         with open("events.log", 'w') as f:
@@ -332,7 +329,7 @@ class Manager:
         # record the status of nodes in arrary for controlling events      
         counters = {}
         flags = {}
-        for node in cluster_nodes:
+        for node in self.cluster_nodes:
             counters[node] = 0
             flags[node] = False
 
@@ -347,7 +344,7 @@ class Manager:
             coming_nodes = [] # coming nodes in one time check
             leaving_nodes = [] # leaving nodes in one time check
 
-            for node in cluster_nodes:
+            for node in self.cluster_nodes:
                 timestamps_tuple = trace[node] # list of tuple for node
                 current_time_tuple = timestamps_tuple[counters[node]]
 

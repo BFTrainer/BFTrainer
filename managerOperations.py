@@ -1,5 +1,4 @@
 import os
-from msgOperations import MSGOperations
 from subprocess import Popen
 import utils
 import psutil
@@ -16,9 +15,6 @@ def create_working_directory():
     work_dir = os.path.exists(WORKING_DIR)
     if not work_dir:
         os.mkdir(WORKING_DIR)
-
-def create_msg_server(): # pass dynamic update data function into 
-    MSGOperations().create_msg_server()
 
 def add_job(jobname, nodes, job_info_dict):
     utils.print_red("Add job was called")
@@ -39,16 +35,19 @@ def add_job(jobname, nodes, job_info_dict):
 
     # 2. Launch new job and get process id 
     with open("stdout.txt","w") as out, open("stderr.txt","w") as err:
-        print("command", command)
+        print(f"command:{command}")
         p = Popen(command, shell=True, env=myenv, stdout=out, stderr=err)
 
-        hvdrunParentPid = p.pid
-        
+        hvdpid = 0
         if utils.is_theta_cluster():
+            # on theta cluster
+            # on theta cluster it seems we cannot directly get the pid of the process
+            hvdrunParentPid = p.pid
             fp = psutil.Process(hvdrunParentPid)
             hvdpid = fp.children()[0].pid
         else:
-            hvdpid = hvdrunParentPid # On polaris cluster the parent pid is the hvdrun pid
+            # On polaris cluster
+            hvdpid = p.pid
 
         print("new job launch success and the hvdpid is:", hvdpid)
 

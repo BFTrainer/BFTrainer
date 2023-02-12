@@ -8,7 +8,7 @@ import horovod.torch as hvd
 import timeit
 import numpy as np
 import time
-from msgOperator import MessageOperator
+from msgOperations import MSGClient
 
 # Benchmark settings
 parser = argparse.ArgumentParser(description='PyTorch Synthetic Benchmark',
@@ -45,7 +45,7 @@ hvd.init()
 #print("debug mark: 1")
 
 print("create udp client")
-mo = MessageOperator(address='10.201.4.62', port=5555)
+mo = MSGClient(address='10.201.4.145', port=5555)
 
 if args.cuda:
     # Horovod: pin GPU to local rank.
